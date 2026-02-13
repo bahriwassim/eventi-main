@@ -22,7 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 
 const navLinks = [
-  { href: '/etoile', label: 'Eventi ESS' },
+  { href: '/etoile', label: 'Evanti ESS' },
   { href: '/', label: 'Événements' },
   { href: '/profile', label: 'Mes Billets' },
 ];
@@ -64,7 +64,7 @@ export function Header() {
               <Logo className="h-6 w-6 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="font-headline text-gradient text-lg">Eventi</span>
+              <span className="font-headline text-gradient text-lg">Evanti</span>
               {user && (user.role === 'admin' || user.role === 'super_admin') && (
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold -mt-1">
                   {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
@@ -180,7 +180,7 @@ export function Header() {
                   className="flex items-center gap-2 text-lg font-semibold"
                 >
                   <Logo className="h-6 w-6 text-primary" />
-                  <span className="font-headline text-gradient">Eventi</span>
+                  <span className="font-headline text-gradient">Evanti</span>
                 </Link>
                 {currentNavLinks.map((link) => (
                   <Link

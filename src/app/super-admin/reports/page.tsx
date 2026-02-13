@@ -16,7 +16,7 @@ export default function SuperAdminReportsPage() {
 
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(20);
-    doc.text("Rapport Financier - Eventi", 105, 20, { align: 'center' });
+    doc.text("Rapport Financier - Evanti", 105, 20, { align: 'center' });
 
     doc.setFontSize(12);
     doc.setFont('Helvetica', 'normal');

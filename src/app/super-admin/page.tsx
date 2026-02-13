@@ -28,7 +28,7 @@ export default function SuperAdminOverviewPage() {
   const { toast } = useToast();
   // Mock payment requests
   const [paymentRequests, setPaymentRequests] = useState([
-    { id: '1', adminName: 'Admin Eventi', amount: 450.00, status: 'pending', date: '2024-05-20' },
+    { id: '1', adminName: 'Admin Evanti', amount: 450.00, status: 'pending', date: '2024-05-20' },
     { id: '2', adminName: 'Organisateur Sousse', amount: 1250.00, status: 'pending', date: '2024-05-21' },
   ]);
 

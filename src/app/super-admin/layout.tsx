@@ -16,7 +16,7 @@ export default function SuperAdminLayout({
             <main className="flex-1 p-4 md:p-8 bg-background/50">{children}</main>
              {/* Footer removed or simplified for dashboard to avoid broken links/layout issues */}
              <footer className="py-4 px-8 border-t border-white/5 text-center text-xs text-muted-foreground bg-background/50">
-                © {new Date().getFullYear()} Eventi Super Admin Dashboard
+                © {new Date().getFullYear()} Evanti Super Admin Dashboard
             </footer>
           </div>
         </div>

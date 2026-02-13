@@ -6,7 +6,7 @@ import { FooterWrapper } from '@/components/footer-wrapper';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'Eventi - Découvrez des Événements Extraordinaires',
+  title: 'Evanti - Découvrez des Événements Extraordinaires',
   description: 'Votre portail premium pour découvrir, réserver et vivre les meilleurs événements à Sousse et dans la région du Sahel.',
 };
 
@@ -21,6 +21,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
       <body
         className={cn(

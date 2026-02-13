@@ -22,7 +22,7 @@ export default function TermsOfServicePage() {
             <div>
               <p className="font-semibold text-foreground">Contact :</p>
               <p>Tél : 95 66 4444</p>
-              <p>Email : contact@eventi.com</p>
+              <p>Email : contact@evanti.tn</p>
             </div>
           </div>
         </section>
@@ -37,12 +37,12 @@ export default function TermsOfServicePage() {
         <section className="p-6 bg-card/50 backdrop-blur-sm rounded-xl border border-white/5">
           <h2 className="text-2xl font-bold text-foreground mb-4">2. Licence d&apos;Utilisation</h2>
           <p className="mb-4">
-            Il est permis de télécharger temporairement une copie du matériel (information ou logiciel) sur le site web d&apos;Eventi pour une visualisation transitoire personnelle et non commerciale uniquement. Il s&apos;agit de l&apos;octroi d&apos;une licence, non d&apos;un transfert de titre, et sous cette licence, vous ne pouvez pas :
+            Il est permis de télécharger temporairement une copie du matériel (information ou logiciel) sur le site web d&apos;Evanti pour une visualisation transitoire personnelle et non commerciale uniquement. Il s&apos;agit de l&apos;octroi d&apos;une licence, non d&apos;un transfert de titre, et sous cette licence, vous ne pouvez pas :
           </p>
           <ul className="list-disc pl-6 space-y-2">
             <li>Modifier ou copier le matériel ;</li>
             <li>Utiliser le matériel à des fins commerciales ou pour toute exposition publique (commerciale ou non commerciale) ;</li>
-            <li>Tenter de décompiler ou de désosser tout logiciel contenu sur le site web d&apos;Eventi ;</li>
+            <li>Tenter de décompiler ou de désosser tout logiciel contenu sur le site web d&apos;Evanti ;</li>
             <li>Supprimer tout droit d&apos;auteur ou autre mention de propriété du matériel ; ou</li>
             <li>Transférer le matériel à une autre personne ou &quot;miroir&quot; du matériel sur un autre serveur.</li>
           </ul>
@@ -51,21 +51,21 @@ export default function TermsOfServicePage() {
         <section className="p-6 bg-card/50 backdrop-blur-sm rounded-xl border border-white/5">
           <h2 className="text-2xl font-bold text-foreground mb-4">3. Clause de Non-responsabilité</h2>
           <p>
-            Le matériel sur le site web d&apos;Eventi est fourni &quot;tel quel&quot;. Eventi ne donne aucune garantie, expresse ou implicite, et rejette et nie par la présente toutes les autres garanties, y compris, sans limitation, les garanties implicites ou conditions de qualité marchande, d&apos;adéquation à un usage particulier, ou de non-violation de la propriété intellectuelle ou autre violation des droits.
+            Le matériel sur le site web d&apos;Evanti est fourni &quot;tel quel&quot;. Evanti ne donne aucune garantie, expresse ou implicite, et rejette et nie par la présente toutes les autres garanties, y compris, sans limitation, les garanties implicites ou conditions de qualité marchande, d&apos;adéquation à un usage particulier, ou de non-violation de la propriété intellectuelle ou autre violation des droits.
           </p>
         </section>
 
         <section className="p-6 bg-card/50 backdrop-blur-sm rounded-xl border border-white/5">
           <h2 className="text-2xl font-bold text-foreground mb-4">4. Limitations</h2>
           <p>
-            En aucun cas, Eventi ou ses fournisseurs ne seront responsables de tout dommage (y compris, sans limitation, les dommages pour perte de données ou de profit, ou en raison d&apos;une interruption d&apos;activité) découlant de l&apos;utilisation ou de l&apos;impossibilité d&apos;utiliser le matériel sur le site Internet d&apos;Eventi, même si Eventi ou un représentant autorisé d&apos;Eventi a été informé oralement ou par écrit de la possibilité de tels dommages.
+            En aucun cas, Evanti ou ses fournisseurs ne seront responsables de tout dommage (y compris, sans limitation, les dommages pour perte de données ou de profit, ou en raison d&apos;une interruption d&apos;activité) découlant de l&apos;utilisation ou de l&apos;impossibilité d&apos;utiliser le matériel sur le site Internet d&apos;Evanti, même si Evanti ou un représentant autorisé d&apos;Evanti a été informé oralement ou par écrit de la possibilité de tels dommages.
           </p>
         </section>
 
         <section className="p-6 bg-card/50 backdrop-blur-sm rounded-xl border border-white/5">
           <h2 className="text-2xl font-bold text-foreground mb-4">5. Révisions et Errata</h2>
           <p>
-            Le matériel apparaissant sur le site web d&apos;Eventi pourrait inclure des erreurs techniques, typographiques ou photographiques. Eventi ne garantit pas que l&apos;un des matériaux sur son site web est exact, complet ou à jour. Eventi peut apporter des modifications au matériel contenu sur son site web à tout moment sans préavis.
+            Le matériel apparaissant sur le site web d&apos;Evanti pourrait inclure des erreurs techniques, typographiques ou photographiques. Evanti ne garantit pas que l&apos;un des matériaux sur son site web est exact, complet ou à jour. Evanti peut apporter des modifications au matériel contenu sur son site web à tout moment sans préavis.
           </p>
         </section>
       </div>

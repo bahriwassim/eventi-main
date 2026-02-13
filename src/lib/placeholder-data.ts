@@ -178,8 +178,8 @@ export const users: User[] = [
   {
     id: 'usr_user',
     name: 'Utilisateur de Démo',
-    email: 'user@eventi.com',
-    photoURL: 'https://i.pravatar.cc/150?u=user@eventi.com',
+    email: 'user@evanti.com',
+    photoURL: 'https://i.pravatar.cc/150?u=user@evanti.com',
     purchasedTickets: [
       { ticketId: 'TKT_1001', eventId: '1', eventName: 'Festival de Musique de Sousse', purchaseDate: '2026-07-15', qrCodeValue: 'EVENTI-1-TKT_1001-USR_USER'},
       { ticketId: 'TKT_1003', eventId: '9', eventName: 'Ligue 1 : Étoile Sportive du Sahel vs Club Africain', purchaseDate: '2026-10-20', qrCodeValue: 'EVENTI-9-TKT_1003-USR_USER' },
@@ -187,25 +187,25 @@ export const users: User[] = [
   },
   {
     id: 'usr_admin',
-    name: 'Admin Eventi',
-    email: 'admin@eventi.com',
-    photoURL: 'https://i.pravatar.cc/150?u=admin@eventi.com',
+    name: 'Admin Evanti',
+    email: 'admin@evanti.com',
+    photoURL: 'https://i.pravatar.cc/150?u=admin@evanti.com',
     purchasedTickets: [
        { ticketId: 'TKT_2001', eventId: '2', eventName: 'Journées Théâtrales de Sousse', purchaseDate: '2026-08-01', qrCodeValue: 'EVENTI-2-TKT_2001-USR_ADMIN'}
     ]
   },
   {
     id: 'usr_superadmin',
-    name: 'Super Admin Eventi',
-    email: 'superadmin@eventi.com',
-    photoURL: 'https://i.pravatar.cc/150?u=superadmin@eventi.com',
+    name: 'Super Admin Evanti',
+    email: 'superadmin@evanti.com',
+    photoURL: 'https://i.pravatar.cc/150?u=superadmin@evanti.com',
     purchasedTickets: []
   },
   {
     id: 'usr_gate',
     name: 'Contrôleur Porte',
-    email: 'gate@eventi.com',
-    photoURL: 'https://i.pravatar.cc/150?u=gate@eventi.com',
+    email: 'gate@evanti.com',
+    photoURL: 'https://i.pravatar.cc/150?u=gate@evanti.com',
     purchasedTickets: []
   }
 ];

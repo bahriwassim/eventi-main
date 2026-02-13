@@ -102,7 +102,7 @@ export default function SignupPage() {
             </div>
             <h1 className="text-2xl font-bold font-headline text-foreground">Créer un compte</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Rejoignez Eventi pour découvrir des événements incroyables.
+              Rejoignez Evanti pour découvrir des événements incroyables.
             </p>
           </div>
 

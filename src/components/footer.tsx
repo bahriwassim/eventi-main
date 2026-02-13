@@ -24,7 +24,7 @@ export function Footer() {
                             <div className="p-2 rounded-xl bg-white/10 group-hover:bg-white/20 transition-colors duration-300">
                                 <Logo className="h-8 w-8 text-white transition-all duration-500 group-hover:scale-110 group-hover:rotate-12" />
                             </div>
-                            <span className="text-2xl font-bold font-headline text-white">Eventi</span>
+                            <span className="text-2xl font-bold font-headline text-white">Evanti</span>
                         </Link>
                         <p className="text-sm text-gray-400 leading-relaxed max-w-xs">
                             Votre portail premium pour découvrir et réserver les meilleurs événements à Sousse et dans la région du Sahel.
@@ -97,7 +97,7 @@ export function Footer() {
                                 <div className="p-2 rounded-lg bg-white/5 text-white group-hover:bg-white/10 transition-colors">
                                     <Mail className="h-4 w-4" />
                                 </div>
-                                <span className="mt-1">contact@eventi.tn</span>
+                                <a href="mailto:contact@evanti.tn" className="mt-1 hover:text-white">contact@evanti.tn</a>
                             </li>
                             <li className="flex items-start gap-3 text-sm text-gray-400 group">
                                 <div className="p-2 rounded-lg bg-white/5 text-white group-hover:bg-white/10 transition-colors">
@@ -112,7 +112,7 @@ export function Footer() {
                 {/* Bottom bar */}
                 <div className="mt-10 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <p className="text-xs text-gray-500">
-                        © {new Date().getFullYear()} Eventi. Tous droits réservés.
+                        © {new Date().getFullYear()} Evanti. Tous droits réservés.
                     </p>
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                         <Link href="/privacy-policy" className="hover:text-white transition-colors cursor-pointer">Politique de confidentialité</Link>
