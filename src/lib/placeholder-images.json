@@ -1,0 +1,70 @@
+{
+  "placeholderImages": [
+    {
+      "id": "event-1",
+      "description": "Un festival de musique vibrant au coucher du soleil.",
+      "imageUrl": "https://images.unsplash.com/photo-1582711012124-a56cf82307a0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxtdXNpYyUyMGZlc3RpdmFsfGVufDB8fHx8MTc3MDU3Mzk1OHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "festival musique"
+    },
+    {
+      "id": "event-2",
+      "description": "Une performance de danse traditionnelle.",
+      "imageUrl": "https://images.unsplash.com/photo-1756370256926-e48ca54c5efe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxjdWx0dXJhbCUyMGRhbmNlfGVufDB8fHx8MTc3MDYzMTIwMHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "danse culturelle"
+    },
+    {
+      "id": "event-3",
+      "description": "Une exposition d'art moderne dans une galerie.",
+      "imageUrl": "https://images.unsplash.com/photo-1518998053901-5348d3961a04?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxhcnQlMjBnYWxsZXJ5fGVufDB8fHx8MTc3MDU5NTgzNXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "galerie art"
+    },
+    {
+      "id": "event-4",
+      "description": "Une conférence technique avec de nombreux participants.",
+      "imageUrl": "https://images.unsplash.com/photo-1560439514-4e9645039924?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHx0ZWNoJTIwY29uZmVyZW5jZXxlbnwwfHx8fDE3NzA1MzA0ODZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "conférence tech"
+    },
+    {
+      "id": "event-5",
+      "description": "Un festival culinaire avec divers stands de nourriture.",
+      "imageUrl": "https://images.unsplash.com/photo-1705359573945-bcf2d0b70b0b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxmb29kJTIwZmVzdGl2YWx8ZW58MHx8fHwxNzcwNjMxMjAwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "festival gastronomique"
+    },
+    {
+      "id": "event-6",
+      "description": "Une projection de cinéma en plein air la nuit.",
+      "imageUrl": "https://images.unsplash.com/photo-1548095115-45697e222a58?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxvdXRkb29yJTIwY2luZW1hfGVufDB8fHx8MTc3MDYzMTIwMHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "cinéma plein air"
+    },
+    {
+      "id": "event-7",
+      "description": "Un défilé de mode avec des mannequins sur un podium.",
+      "imageUrl": "https://images.unsplash.com/photo-1571924848943-25c2c95bbb4b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxmYXNoaW9uJTIwc2hvd3xlbnwwfHx8fDE3NzA2MzEyMDB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "défilé mode"
+    },
+    {
+      "id": "event-8",
+      "description": "Une foire du livre avec des étagères de livres.",
+      "imageUrl": "https://images.unsplash.com/photo-1631888717179-7e213fc93e1d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxib29rJTIwZmFpcnxlbnwwfHx8fDE3NzA2MzEyMDB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "foire livre"
+    },
+    {
+      "id": "event-9",
+      "description": "Un match de football dans un stade illuminé.",
+      "imageUrl": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxmb290YmFsbCUyMG1hdGNofGVufDB8fHx8MTc3MDcwMzkzN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "match football"
+    },
+    {
+      "id": "event-10",
+      "description": "Les lumières d'un stade de football la nuit.",
+      "imageUrl": "https://images.unsplash.com/photo-1515523110800-9415d13b84a8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxzdGFkaXVtJTIwbGlnaHRzfGVufDB8fHx8MTc3MDcwMzkzN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "stade lumières"
+    },
+    {
+      "id": "user-avatar",
+      "description": "Un avatar de remplacement pour un utilisateur.",
+      "imageUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxwZXJzb24lMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzA1ODUyMzF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "portrait personne"
+    }
+  ]
+}

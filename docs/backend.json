@@ -1,0 +1,341 @@
+{
+  "entities": {
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents a user profile in the Eventi Sahel application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the UserProfile entity."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the user.",
+          "format": "email"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL of the user's profile picture."
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "email"
+      ]
+    },
+    "Event": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Event",
+      "type": "object",
+      "description": "Represents an event in the Sahel region.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Event entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the event."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the event."
+        },
+        "category": {
+          "type": "string",
+          "description": "The category of the event (e.g., music, sports, culture)."
+        },
+        "date": {
+          "type": "string",
+          "description": "The date and time of the event.",
+          "format": "date-time"
+        },
+        "location": {
+          "type": "string",
+          "description": "The location of the event."
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of a ticket for the event."
+        },
+        "adminId": {
+          "type": "string",
+          "description": "Reference to Admin. (Relationship: Admin 1:N Event)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "category",
+        "date",
+        "location",
+        "price"
+      ]
+    },
+    "PurchaseHistory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PurchaseHistory",
+      "type": "object",
+      "description": "Represents a user's purchase history.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PurchaseHistory entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N PurchaseHistory)"
+        },
+        "eventId": {
+          "type": "string",
+          "description": "Reference to Event. (Relationship: Event 1:N PurchaseHistory)"
+        },
+        "purchaseDate": {
+          "type": "string",
+          "description": "The date and time of the purchase.",
+          "format": "date-time"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The number of tickets purchased."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "The total amount paid for the purchase."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "eventId",
+        "purchaseDate",
+        "quantity",
+        "totalAmount"
+      ]
+    },
+    "Admin": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Admin",
+      "type": "object",
+      "description": "Represents an admin user with privileges to manage events and pricing.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Admin entity."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the admin."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the admin."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the admin.",
+          "format": "email"
+        },
+        "eventIds": {
+          "type": "array",
+          "description": "References to Events. (Relationship: Admin 1:N Event)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email"
+      ]
+    },
+    "GatePersonnel": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "GatePersonnel",
+      "type": "object",
+      "description": "Represents gate personnel who verify tickets.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the GatePersonnel entity."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the gate personnel."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the gate personnel."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the gate personnel.",
+          "format": "email"
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email"
+      ]
+    },
+    "SuperAdmin": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SuperAdmin",
+      "type": "object",
+      "description": "Represents a super admin user with privileges to manage events, commissions, and financial reports.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SuperAdmin entity."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the super admin."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the super admin."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the super admin.",
+          "format": "email"
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous",
+      "google.com"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores user profiles.  Path-based ownership ensures only the authenticated user can access their profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/events/{eventId}",
+        "definition": {
+          "entityName": "Event",
+          "schema": {
+            "$ref": "#/backend/entities/Event"
+          },
+          "description": "Stores event details. Includes the 'adminId' for authorization purposes (denormalization).",
+          "params": [
+            {
+              "name": "eventId",
+              "description": "The unique identifier of the event."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/purchaseHistory/{purchaseHistoryId}",
+        "definition": {
+          "entityName": "PurchaseHistory",
+          "schema": {
+            "$ref": "#/backend/entities/PurchaseHistory"
+          },
+          "description": "Stores purchase history for each user. Path-based ownership ensures only the user can access their purchase history.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "purchaseHistoryId",
+              "description": "The unique identifier of the purchase history entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/admins/{adminId}",
+        "definition": {
+          "entityName": "Admin",
+          "schema": {
+            "$ref": "#/backend/entities/Admin"
+          },
+          "description": "Stores admin user profiles. Existence in this collection grants admin privileges.",
+          "params": [
+            {
+              "name": "adminId",
+              "description": "The unique identifier of the admin user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/superAdmins/{superAdminId}",
+        "definition": {
+          "entityName": "SuperAdmin",
+          "schema": {
+            "$ref": "#/backend/entities/SuperAdmin"
+          },
+          "description": "Stores super admin user profiles. Existence in this collection grants super admin privileges.",
+          "params": [
+            {
+              "name": "superAdminId",
+              "description": "The unique identifier of the super admin user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/events/{eventId}/gatePersonnel/{gatePersonnelId}",
+        "definition": {
+          "entityName": "GatePersonnel",
+          "schema": {
+            "$ref": "#/backend/entities/GatePersonnel"
+          },
+          "description": "Stores gate personnel associated with each event. Grants access to verify tickets for the associated event.",
+          "params": [
+            {
+              "name": "eventId",
+              "description": "The unique identifier of the event."
+            },
+            {
+              "name": "gatePersonnelId",
+              "description": "The unique identifier of the gate personnel."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to support the Eventi Sahel application, emphasizing security, scalability, and ease of debugging. It adheres to the principles of Authorization Independence, Clarity of Intent, DBAC (Database-Based Access Control), and QAPs (Rules are not Filters). \n\n**Authorization Independence:** Achieved through denormalization. The `events` collection includes the `adminId` field, eliminating the need for security rules to fetch admin data. The `purchaseHistory` collection includes both `userId` and `eventId` for similar reasons. This approach ensures atomic operations are possible and avoids cascading failures. For collaborative data, such as event access controlled by gate personnel, a `gatePersonnel` subcollection of `events` manages access without requiring complex `get()` operations.\n\n**Structural Segregation:** Each collection is designed to hold documents with similar security requirements. User profiles are stored separately under the `/users/{userId}` path, ensuring private access. Public event data is stored in the `/events` collection, with stricter rules to control modifications.\n\n**Access Modeling:**\n*   Private Data: User profiles are stored under `/users/{userId}`, ensuring that only the user can read/write their data.\n*   Hierarchical Paths: `/users/{userId}/purchaseHistory/{purchaseHistoryId}` establishes clear ownership for purchase histories.\n*   Collaborative Data: Gate personnel access to events is managed through the `/events/{eventId}/gatePersonnel/{gatePersonnelId}` collection.\n*   Global Roles (DBAC): Admin and SuperAdmin roles are determined by the existence of documents in `/admins/{adminId}` and `/superAdmins/{superAdminId}` collections, respectively.\n\n**QAPs (Rules are not Filters):** The structure facilitates secure list operations. For example, listing events is secure because the rules can easily enforce read access based on the event's public nature. Listing purchase histories is secured by the ownership enforced by the `/users/{userId}/purchaseHistory/{purchaseHistoryId}` path structure.\n\nThis structure promotes simplicity and robustness in security rules, reduces the risk of misconfiguration, and enhances the overall maintainability of the application."
+  }
+}
