@@ -236,7 +236,7 @@ export default function ProfilePage() {
                     Modifier le profil
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="glass-strong border-white/10">
+                <DialogContent className="glass-strong border-white/10 sm:max-w-[425px]">
                   <DialogHeader>
                     <DialogTitle>Modifier le profil</DialogTitle>
                     <DialogDescription>Mettez à jour vos informations personnelles.</DialogDescription>
