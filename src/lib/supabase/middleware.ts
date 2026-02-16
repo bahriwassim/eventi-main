@@ -41,8 +41,7 @@ export async function updateSession(request: NextRequest) {
   const requiresAuth =
     pathname.startsWith('/admin') ||
     pathname.startsWith('/super-admin') ||
-    pathname.startsWith('/gate') ||
-    pathname.startsWith('/profile')
+    pathname.startsWith('/gate')
 
   if (requiresAuth && !user) {
     const url = request.nextUrl.clone()

@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { Header } from '@/components/header';
 import { FooterWrapper } from '@/components/footer-wrapper';
+import { CookieConsent } from '@/components/cookie-consent';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({
          */}
         <FooterWrapper />
         <Toaster />
+        <CookieConsent />
       </body>
     </html>
   );

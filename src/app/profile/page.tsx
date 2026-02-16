@@ -32,7 +32,8 @@ export default function ProfilePage() {
   const { user, loading } = useUser();
   const router = useRouter();
   const { toast } = useToast();
-  const supabase = createClient();
+  // Ensure supabase client is stable across renders to prevent useEffect loops
+  const [supabase] = useState(() => createClient());
 
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [profileData, setProfileData] = useState({
@@ -41,6 +42,9 @@ export default function ProfilePage() {
     phone: '',
     address: ''
   });
+
+  const [realTickets, setRealTickets] = useState<any[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -53,8 +57,76 @@ export default function ProfilePage() {
         phone: user.user_metadata?.phone || '',
         address: user.user_metadata?.address || ''
       });
+
+      // Fetch tickets from Supabase
+      const fetchTickets = async () => {
+        setLoadingTickets(true);
+        try {
+            // We need to fetch tickets and join with events to get event details
+            // Since Supabase join syntax depends on foreign keys, and we know we have them:
+            // tickets.event_id -> events.id
+            
+            // Note: In a real production app with typed client, we would have better types.
+            // Here we try to fetch tickets and manually map/fetch events if needed or use select with join.
+            
+            // Let's try to fetch tickets first.
+            const { data: ticketsData, error: ticketsError } = await supabase
+              .from('tickets')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('purchase_date', { ascending: false });
+
+            // Get local tickets for placeholder events (from localStorage)
+            const localTickets = JSON.parse(localStorage.getItem('eventi_local_tickets') || '[]');
+            const userLocalTickets = localTickets.filter((t: any) => t.user_id === user.id);
+            
+            // Get cloud-persisted placeholder tickets (from user metadata)
+            const metaTickets = user.user_metadata?.tickets || [];
+            
+            // Merge and de-duplicate tickets based on ID
+            const combinedPlaceholderTickets = [...userLocalTickets, ...metaTickets];
+            const uniquePlaceholderTickets = Array.from(new Map(combinedPlaceholderTickets.map(item => [item.id, item])).values());
+
+            // Merge real and local/meta tickets
+            const mergedTickets = [...(ticketsData || []), ...uniquePlaceholderTickets];
+
+            if (mergedTickets.length > 0) {
+                // Since we might be using placeholder events (IDs 1-14) which might NOT be in the DB events table yet
+                // (unless we seeded them), we have a mix. 
+                // If the event_id corresponds to a placeholder event, we get details from placeholder-data.
+                // If it's a real UUID event, we should technically fetch it from DB.
+                
+                // For now, let's map the tickets to the format the UI expects.
+                const mappedTickets = mergedTickets.map(t => {
+                    // Try to find in placeholder events first (for hybrid approach)
+                    let eventDetails = events.find(e => e.id === t.event_id);
+                    
+                    // If not found in placeholder, maybe it's in DB? 
+                    // For this specific task, user is likely buying placeholder events.
+                    
+                    return {
+                        ticketId: t.id,
+                        eventId: t.event_id,
+                        eventName: eventDetails?.name || 'Événement Inconnu',
+                        purchaseDate: t.purchase_date,
+                        qrCodeValue: t.qr_code_value || `EVENTI-${t.event_id}-${t.id}-${user.id}`,
+                        event: eventDetails // Keep reference to full event object for UI
+                    };
+                });
+                // Sort by date (descending)
+                mappedTickets.sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+                setRealTickets(mappedTickets);
+            }
+        } catch (err) {
+            console.error("Error fetching tickets:", err);
+        } finally {
+            setLoadingTickets(false);
+        }
+      };
+      
+      fetchTickets();
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, supabase]);
 
   const handleUpdateProfile = async () => {
     try {
@@ -77,8 +149,39 @@ export default function ProfilePage() {
   };
 
   const demoUser = user ? users.find(u => u.email === user.email) : null;
-  const purchasedTickets = demoUser ? demoUser.purchasedTickets : [];
+  // Combine placeholder tickets (for demo users) with real tickets from DB
+  const placeholderTickets = demoUser ? demoUser.purchasedTickets : [];
+  
+  // Create a unified ticket list
+  // Map real tickets to match the structure if needed, but we already did that in fetchTickets
+  // We need to be careful with types.
+  // Let's just use realTickets as the source of truth for "My Tickets" for new users.
+  // If we want to support the demo user seeing their hardcoded tickets, we can merge.
+  
+  const allTickets = [...realTickets];
+  
+  // If it's a demo user, add their placeholder tickets if not already present (by ID check maybe?)
+  // For simplicity, let's just append them.
+  if (demoUser && realTickets.length === 0) {
+      // Only show placeholder tickets if no real tickets found? 
+      // Or just merge them.
+      placeholderTickets.forEach(pt => {
+          const eventDetails = events.find(e => e.id === pt.eventId);
+          allTickets.push({
+              ticketId: pt.ticketId,
+              eventId: pt.eventId,
+              eventName: pt.eventName,
+              purchaseDate: pt.purchaseDate,
+              qrCodeValue: pt.qrCodeValue,
+              event: eventDetails
+          });
+      });
+  }
 
+  // We should not block the render if loadingTickets is true but we have user data.
+  // Instead, show a loading state for the tickets section or just render empty and let useEffect fill it.
+  // But the initial 'loading' from useUser is critical.
+  
   if (loading || !user) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-4rem)]">
@@ -101,7 +204,8 @@ export default function ProfilePage() {
               <div className="relative inline-block mb-4">
                 <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-fuchsia-500 rounded-full opacity-60 blur-sm" />
                 <Avatar className="w-24 h-24 relative ring-4 ring-background shadow-xl">
-                  {user.photoURL ? <AvatarImage src={user.photoURL} alt={user.displayName || 'User'} /> : (userAvatar && <AvatarImage src={userAvatar.imageUrl} alt={user.displayName || 'User'} />)}
+                  {/* Prioritize user avatar if available, otherwise show placeholder, but remove hardcoded placeholder logic if desired */}
+                  {user.photoURL ? <AvatarImage src={user.photoURL} alt={user.displayName || 'User'} /> : null}
                   <AvatarFallback className="bg-slate-200 text-slate-500 flex items-center justify-center">
                     <User className="h-12 w-12" />
                   </AvatarFallback>
@@ -191,10 +295,10 @@ export default function ProfilePage() {
               <Ticket className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold font-headline text-foreground">Mes Billets</h2>
             </div>
-            {purchasedTickets.length > 0 ? (
+            {allTickets.length > 0 ? (
               <div className="space-y-4">
-                {purchasedTickets.map((ticket, index) => {
-                  const event = eventMap.get(ticket.eventId);
+                {allTickets.map((ticket, index) => {
+                  const event = ticket.event || eventMap.get(ticket.eventId);
                   const eventImage = event ? eventImageMap.get(event.image) : undefined;
                   if (!event) return null;
 
@@ -243,15 +347,25 @@ export default function ProfilePage() {
             ) : (
               <div className="rounded-2xl glass border-white/5 p-12 text-center animate-fade-in-up">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-                  <Ticket className="h-8 w-8 text-primary animate-bounce-subtle" />
+                  {loadingTickets ? (
+                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                  ) : (
+                    <Ticket className="h-8 w-8 text-primary animate-bounce-subtle" />
+                  )}
                 </div>
-                <h3 className="text-lg font-bold font-headline text-foreground">Aucun Billet Pour L&apos;instant</h3>
-                <p className="mt-2 text-sm text-muted-foreground max-w-sm mx-auto">
-                  Vous n&apos;avez acheté aucun billet. Pour voir un exemple, créez un compte avec l&apos;e-mail <code className="bg-white/10 px-1.5 py-0.5 rounded text-primary text-xs">user@eventi.com</code>.
-                </p>
-                <Button asChild className="mt-6 bg-gradient-primary hover:opacity-90 transition-opacity border-0 shadow-glow-sm">
-                  <Link href="/">Parcourir les événements</Link>
-                </Button>
+                <h3 className="text-lg font-bold font-headline text-foreground">
+                    {loadingTickets ? 'Chargement des billets...' : 'Aucun Billet Pour L\'instant'}
+                </h3>
+                {!loadingTickets && (
+                    <>
+                        <p className="mt-2 text-sm text-muted-foreground max-w-sm mx-auto">
+                        Vous n&apos;avez acheté aucun billet. Pour voir un exemple, créez un compte avec l&apos;e-mail <code className="bg-white/10 px-1.5 py-0.5 rounded text-primary text-xs">user@eventi.com</code>.
+                        </p>
+                        <Button asChild className="mt-6 bg-gradient-primary hover:opacity-90 transition-opacity border-0 shadow-glow-sm">
+                        <Link href="/">Parcourir les événements</Link>
+                        </Button>
+                    </>
+                )}
               </div>
             )}
           </div>

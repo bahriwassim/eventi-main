@@ -4,7 +4,7 @@ export function PrivacyPolicyContent() {
       <section className="p-6 bg-card/50 backdrop-blur-sm rounded-xl border border-white/5">
         <h2 className="text-2xl font-bold text-foreground mb-4">1. Collecte des Informations</h2>
         <p>
-          Nous recueillons des informations lorsque vous vous inscrivez sur notre site, lorsque vous vous connectez à votre compte, faites un achat, participez à un concours, et / ou lorsque vous vous déconnectez. Les informations recueillies incluent votre nom, votre adresse e-mail, numéro de téléphone, et / ou carte de crédit.
+          Nous recueillons des informations lorsque vous vous inscrivez sur notre site, lorsque vous vous connectez à votre compte, faites un achat, participez à un concours, et / ou lorsque vous vous déconnectez. Les informations recueillies incluent votre nom, votre adresse e-mail, numéro de téléphone .
         </p>
       </section>
       <section className="p-6 bg-card/50 backdrop-blur-sm rounded-xl border border-white/5">

@@ -46,6 +46,9 @@ export function Header() {
       await supabase.auth.signOut();
       toast({ title: 'Déconnexion réussie.' });
       router.push('/');
+      router.refresh();
+      // Force a hard reload to ensure all state is cleared
+      window.location.href = '/';
     } catch (error: any) {
       toast({
         variant: 'destructive',
