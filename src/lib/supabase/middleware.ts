@@ -37,17 +37,82 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/signup') &&
-    !request.nextUrl.pathname.startsWith('/auth') &&
-    request.nextUrl.pathname !== '/'
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
-    // const url = request.nextUrl.clone()
-    // url.pathname = '/login'
-    // return NextResponse.redirect(url)
+  const pathname = request.nextUrl.pathname
+  const requiresAuth =
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/super-admin') ||
+    pathname.startsWith('/gate') ||
+    pathname.startsWith('/profile')
+
+  if (requiresAuth && !user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    const redirect = NextResponse.redirect(url)
+    // Copier les cookies du supabaseResponse vers la redirection
+    supabaseResponse.cookies.getAll().forEach(({ name, value, options }) => {
+      redirect.cookies.set(name, value, options)
+    })
+    return redirect
+  }
+
+  if (user) {
+    const isAdminPath = pathname.startsWith('/admin')
+    const isSuperAdminPath = pathname.startsWith('/super-admin')
+    const isGatePath = pathname.startsWith('/gate')
+
+    if (isAdminPath || isSuperAdminPath || isGatePath) {
+      const { data: superAdmin } = await supabase
+        .from('super_admins')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const { data: admin } = await supabase
+        .from('admins')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const { data: gate } = await supabase
+        .from('gate_personnel')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const isSuperAdmin = !!superAdmin
+      const isAdmin = !!admin
+      const isGate = !!gate
+
+      if (isSuperAdminPath && !isSuperAdmin) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        const redirect = NextResponse.redirect(url)
+        supabaseResponse.cookies.getAll().forEach(({ name, value, options }) => {
+          redirect.cookies.set(name, value, options)
+        })
+        return redirect
+      }
+
+      if (isAdminPath && !(isAdmin || isSuperAdmin)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        const redirect = NextResponse.redirect(url)
+        supabaseResponse.cookies.getAll().forEach(({ name, value, options }) => {
+          redirect.cookies.set(name, value, options)
+        })
+        return redirect
+      }
+
+      if (isGatePath && !(isGate || isAdmin || isSuperAdmin)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        const redirect = NextResponse.redirect(url)
+        supabaseResponse.cookies.getAll().forEach(({ name, value, options }) => {
+          redirect.cookies.set(name, value, options)
+        })
+        return redirect
+      }
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're

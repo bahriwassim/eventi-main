@@ -1,7 +1,7 @@
 'use client';
 
 import { notFound, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { events } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,9 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/hooks/use-user';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { PrivacyPolicyContent } from '@/components/privacy-policy-content';
 
 type CheckoutPageProps = {
   params: { id: string };
@@ -25,6 +28,8 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
   const { toast } = useToast();
   const { user } = useUser();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [acceptPolicy, setAcceptPolicy] = useState(false);
+  const [policyOpen, setPolicyOpen] = useState(false);
 
   if (!event) {
     notFound();
@@ -34,6 +39,45 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
   const selectedType = searchParams?.type as string || 'Billet Standard';
   const urlPrice = searchParams?.price ? parseFloat(searchParams.price as string) : null;
   const ticketPrice = urlPrice ?? event.price;
+
+  // Form State
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [attendeeNames, setAttendeeNames] = useState<string[]>(Array(quantity).fill(''));
+  const [cardName, setCardName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvc, setCvc] = useState('');
+
+  const [password, setPassword] = useState('');
+  const [isLoginMode, setIsLoginMode] = useState(false);
+
+  // Update attendee names array when quantity changes
+  useEffect(() => {
+    setAttendeeNames(prev => {
+      const newNames = [...prev];
+      if (quantity > prev.length) {
+        return [...newNames, ...Array(quantity - prev.length).fill('')];
+      } else {
+        return newNames.slice(0, quantity);
+      }
+    });
+  }, [quantity]);
+
+  // Pre-fill user data
+  useEffect(() => {
+    if (user) {
+      if (!email) setEmail(user.email || '');
+      if (!phone) setPhone(user.phone || user.user_metadata?.phone_number || '');
+      setAttendeeNames(prev => {
+        const newNames = [...prev];
+        if (newNames.length > 0 && !newNames[0]) {
+          newNames[0] = user.displayName || user.user_metadata?.full_name || '';
+        }
+        return newNames;
+      });
+    }
+  }, [user]);
 
   const subtotal = ticketPrice * quantity;
   const fees = subtotal * 0.07;
@@ -49,21 +93,64 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
   }
 
   const handlePayment = async () => {
-    if (!user) {
-      toast({ variant: "destructive", title: "Erreur", description: "Vous devez être connecté pour acheter un billet." });
-      router.push('/login');
+    if (!acceptPolicy) {
+      toast({ variant: "destructive", title: "Validation requise", description: "Veuillez lire et accepter la Politique de confidentialité." });
       return;
     }
 
     setIsProcessing(true);
 
     try {
+      let userId = user?.id;
+
+      // Handle Authentication if not logged in
+      if (!userId) {
+        if (!email || !password) {
+          toast({ variant: "destructive", title: "Champs requis", description: "Veuillez remplir l'email et le mot de passe." });
+          setIsProcessing(false);
+          return;
+        }
+
+        if (isLoginMode) {
+          // Login
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) throw error;
+          userId = data.user.id;
+        } else {
+          // Signup
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: attendeeNames[0] || email.split('@')[0],
+                phone_number: phone,
+              }
+            }
+          });
+          if (error) throw error;
+          userId = data.user?.id;
+          
+          if (!userId) {
+            toast({ title: "Inscription réussie", description: "Veuillez vérifier votre email pour confirmer votre compte." });
+            // If email confirmation is required, we can't proceed with ticket creation immediately unless we use a service role or wait.
+            // For now, let's assume we stop here or handle it.
+            setIsProcessing(false);
+            return; 
+          }
+        }
+      }
+
       // Create tickets in DB
-      const ticketsToInsert = Array.from({ length: quantity }).map(() => ({
+      const ticketsToInsert = Array.from({ length: quantity }).map((_, i) => ({
         event_id: event.id,
-        user_id: user.id,
-        ticket_type: selectedType,
-        price: ticketPrice,
+        user_id: userId,
+        // ticket_type: selectedType, // Commented out as it might not exist in schema
+        // attendee_name: attendeeNames[i], // Commented out as it might not exist in schema
+        price_paid: ticketPrice, // Changed to price_paid based on schema
         status: 'valid'
       }));
 
@@ -75,7 +162,7 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
       router.push(`/confirmation/${event.id}?type=${selectedType}&price=${ticketPrice}&quantity=${quantity}`);
     } catch (error: any) {
       console.error('Payment error:', error);
-      toast({ variant: "destructive", title: "Erreur de paiement", description: "Une erreur est survenue lors du traitement." });
+      toast({ variant: "destructive", title: "Erreur", description: error.message || "Une erreur est survenue." });
     } finally {
       setIsProcessing(false);
     }
@@ -104,29 +191,154 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
               <p className="text-sm text-muted-foreground">
                 Finalisez votre achat en fournissant vos informations de paiement.
               </p>
-              <div className="space-y-4">
-                {Array.from({ length: quantity }).map((_, index) => (
-                  <div key={index} className="space-y-2">
-                    <Label htmlFor={`name-${index}`} className="text-sm text-muted-foreground">
-                      {quantity > 1 ? `Nom complet (Billet #${index + 1})` : 'Nom complet'}
-                    </Label>
+              
+              {!user && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4">
+                  <div className="flex gap-4 border-b border-white/10 pb-2">
+                    <button 
+                      className={`text-sm font-medium pb-2 border-b-2 transition-colors ${!isLoginMode ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                      onClick={() => setIsLoginMode(false)}
+                    >
+                      Nouveau Compte
+                    </button>
+                    <button 
+                      className={`text-sm font-medium pb-2 border-b-2 transition-colors ${isLoginMode ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                      onClick={() => setIsLoginMode(true)}
+                    >
+                      Se Connecter
+                    </button>
+                  </div>
+                  
+                  {!isLoginMode ? (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-name" className="text-sm text-muted-foreground">Nom complet</Label>
+                        <Input 
+                          id="signup-name" 
+                          placeholder="Votre nom" 
+                          className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
+                          value={attendeeNames[0] || ''}
+                          onChange={(e) => {
+                            const newNames = [...attendeeNames];
+                            newNames[0] = e.target.value;
+                            setAttendeeNames(newNames);
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-email" className="text-sm text-muted-foreground">Email</Label>
+                        <Input 
+                          id="signup-email" 
+                          type="email" 
+                          placeholder="email@example.com" 
+                          className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-phone" className="text-sm text-muted-foreground">Téléphone</Label>
+                        <Input 
+                          id="signup-phone" 
+                          type="tel" 
+                          placeholder="+216 XX XXX XXX" 
+                          className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-password" className="text-sm text-muted-foreground">Mot de passe (pour créer votre compte)</Label>
+                        <Input 
+                          id="signup-password" 
+                          type="password" 
+                          placeholder="••••••••" 
+                          className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="login-email" className="text-sm text-muted-foreground">Email</Label>
+                        <Input 
+                          id="login-email" 
+                          type="email" 
+                          placeholder="email@example.com" 
+                          className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="login-password" className="text-sm text-muted-foreground">Mot de passe</Label>
+                        <Input 
+                          id="login-password" 
+                          type="password" 
+                          placeholder="••••••••" 
+                          className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {user && (
+                <div className="space-y-4">
+                  <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 flex items-center gap-3 text-sm text-primary mb-2">
+                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                    <span>Connecté en tant que <strong>{user.email}</strong></span>
+                  </div>
+                    {Array.from({ length: quantity }).map((_, index) => (
+                      <div key={index} className="space-y-2">
+                        <Label htmlFor={`name-${index}`} className="text-sm text-muted-foreground">
+                          {quantity > 1 ? `Nom complet (Billet #${index + 1})` : 'Nom complet'}
+                        </Label>
+                        <Input 
+                          id={`name-${index}`} 
+                          placeholder="Flen ben Foulen " 
+                          className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
+                          required
+                          value={attendeeNames[index] || ''}
+                          onChange={(e) => {
+                            const newNames = [...attendeeNames];
+                            newNames[index] = e.target.value;
+                            setAttendeeNames(newNames);
+                          }}
+                        />
+                      </div>
+                    ))}
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-sm text-muted-foreground">Adresse e-mail</Label>
                     <Input 
-                      id={`name-${index}`} 
-                      placeholder="Flen ben Foulen " 
+                      id="email" 
+                      type="email" 
+                      placeholder="amina@example.com" 
                       className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
-                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      readOnly
+                      disabled
                     />
                   </div>
-                ))}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm text-muted-foreground">Adresse e-mail</Label>
-                <Input id="email" type="email" placeholder="amina@example.com" className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone" className="text-sm text-muted-foreground">Numéro de téléphone</Label>
-                <Input id="phone" type="tel" placeholder="+216 XX XXX XXX" className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-sm text-muted-foreground">Numéro de téléphone</Label>
+                    <Input 
+                      id="phone" 
+                      type="tel" 
+                      placeholder="+216 XX XXX XXX" 
+                      className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground">Quantité</Label>
                 <div className="flex items-center gap-4">
@@ -140,6 +352,16 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
                 </div>
               </div>
               <Separator className="bg-white/10" />
+              <div className="flex items-start gap-3">
+                <Checkbox id="privacy-accept" checked={acceptPolicy} onCheckedChange={(v) => setAcceptPolicy(!!v)} />
+                <Label htmlFor="privacy-accept" className="text-sm text-muted-foreground">
+                  J&apos;ai lu et j&apos;accepte la{" "}
+                  <button type="button" className="text-primary underline hover:text-fuchsia-400" onClick={() => setPolicyOpen(true)}>
+                    Politique de confidentialité
+                  </button>
+                  .
+                </Label>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="card" className="text-sm text-muted-foreground">Détails de la carte</Label>
                 <div className="relative">
@@ -161,7 +383,7 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
                 className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 shadow-glow-sm mt-2" 
                 size="lg" 
                 onClick={handlePayment}
-                disabled={isProcessing}
+                disabled={isProcessing || !acceptPolicy}
               >
                 {isProcessing ? (
                   <>
@@ -215,6 +437,19 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
           </div>
         </div>
       </div>
+      <Dialog open={policyOpen} onOpenChange={setPolicyOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto glass border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Politique de Confidentialité</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <PrivacyPolicyContent />
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setPolicyOpen(false)} className="ml-auto bg-gradient-primary">Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

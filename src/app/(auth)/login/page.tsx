@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,11 +12,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Chrome, Eye, EyeOff } from 'lucide-react';
 
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get('next');
   const supabase = createClient();
   const { toast } = useToast();
 
@@ -32,7 +34,7 @@ export default function LoginPage() {
       if (error) throw error;
 
       toast({ title: 'Connexion réussie!' });
-      router.push('/profile');
+      router.push(next || '/profile');
     } catch (error: any) {
       let description = error.message;
       if (error.message.includes('Invalid login credentials')) {
@@ -51,7 +53,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${location.origin}/auth/callback`,
+          redirectTo: `${location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`,
         },
       });
       
@@ -156,12 +158,20 @@ export default function LoginPage() {
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Vous n&apos;avez pas de compte ?{' '}
-            <Link href="/signup" className="text-primary hover:text-fuchsia-400 transition-colors font-medium">
+            <Link href={next ? `/signup?next=${encodeURIComponent(next)}` : '/signup'} className="text-primary hover:text-fuchsia-400 transition-colors font-medium">
               S&apos;inscrire
             </Link>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Chargement...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

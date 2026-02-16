@@ -64,7 +64,7 @@ export function Header() {
               <Logo className="h-6 w-6 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="font-headline text-gradient text-lg">Evanti</span>
+              <span className="font-headline text-gradient text-lg font-bold">Evanti</span>
               {user && (user.role === 'admin' || user.role === 'super_admin') && (
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold -mt-1">
                   {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}

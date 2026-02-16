@@ -53,7 +53,7 @@ async function fetchUserRole(user: User) {
       .from('super_admins')
       .select('id')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     if (superAdmin) {
       return { ...formattedUser, role: 'super_admin' };
@@ -64,7 +64,7 @@ async function fetchUserRole(user: User) {
       .from('admins')
       .select('id')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     if (admin) {
       return { ...formattedUser, role: 'admin' };
@@ -75,7 +75,7 @@ async function fetchUserRole(user: User) {
       .from('gate_personnel')
       .select('id')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     if (gate) {
       return { ...formattedUser, role: 'gate' };

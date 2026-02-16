@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Chrome } from 'lucide-react';
 
-export default function SignupPage() {
+function SignupForm() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -20,6 +20,8 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get('next');
   const supabase = createClient();
   const { toast } = useToast();
 
@@ -52,7 +54,7 @@ export default function SignupPage() {
 
       if (data.user) {
         toast({ title: 'Compte créé avec succès!' });
-        router.push('/profile');
+        router.push(next || '/profile');
       }
     } catch (error: any) {
       toast({
@@ -68,7 +70,7 @@ export default function SignupPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${location.origin}/auth/callback`,
+          redirectTo: `${location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`,
         },
       });
       
@@ -215,12 +217,20 @@ export default function SignupPage() {
           </form>
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Vous avez déjà un compte ?{' '}
-            <Link href="/login" className="text-primary hover:text-fuchsia-400 transition-colors font-medium">
+            <Link href={next ? `/login?next=${encodeURIComponent(next)}` : '/login'} className="text-primary hover:text-fuchsia-400 transition-colors font-medium">
               Se connecter
             </Link>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div>Chargement...</div>}>
+      <SignupForm />
+    </Suspense>
   );
 }
