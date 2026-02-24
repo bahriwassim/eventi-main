@@ -1,4 +1,6 @@
 
+"use client";
+
 import {
   Card,
   CardContent,
@@ -16,24 +18,74 @@ import {
 } from "@/components/ui/table";
 import { SalesChart } from "@/components/super-admin/sales-chart";
 import { DollarSign, Ticket, Users, TrendingUp, Calendar, CreditCard } from "lucide-react";
-import { events, users } from "@/lib/placeholder-data";
 import { Badge } from "@/components/ui/badge";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminSalesPage() {
-  const allSales = users.flatMap(user =>
-    user.purchasedTickets.map(ticket => {
-      const event = events.find(e => e.id === ticket.eventId);
-      return {
-        userName: user.name,
-        userEmail: user.email,
-        eventName: event?.name || 'Événement inconnu',
-        eventCategory: event?.category || 'Autre',
-        eventPrice: event?.price || 0,
-        purchaseDate: ticket.purchaseDate,
-        ticketId: ticket.ticketId,
-      };
-    })
-  ).sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+  const [allSales, setAllSales] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+  const { toast } = useToast();
+
+  const fetchSalesData = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          event:events(*),
+          user:users(*)
+        `)
+        .order('purchase_date', { ascending: false });
+
+      if (error) throw error;
+      
+      const formattedSales = data.map(ticket => ({
+        id: ticket.id,
+        eventName: ticket.event?.name || 'Événement inconnu',
+        userName: ticket.user?.full_name || 'Utilisateur inconnu',
+        userEmail: ticket.user?.email || 'N/A',
+        purchaseDate: new Date(ticket.purchase_date).toLocaleDateString(),
+        eventPrice: ticket.price,
+        eventCategory: ticket.event?.category || 'Non classé',
+        status: ticket.status,
+      }));
+
+      setAllSales(formattedSales);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erreur de chargement des ventes",
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSalesData();
+
+    const channel = supabase
+      .channel('tickets-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tickets' },
+        (payload) => {
+          console.log('Change received in tickets!', payload);
+          // Refetch sales data on any change
+          fetchSalesData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
 
   const totalRevenue = allSales.reduce((sum, sale) => sum + sale.eventPrice, 0);
   const totalTicketsSold = allSales.length;

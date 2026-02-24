@@ -18,7 +18,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { events } from "@/lib/placeholder-data";
 import { Button } from "@/components/ui/button";
 import { Check, X } from "lucide-react";
 import { useState } from "react";

@@ -4,13 +4,14 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { EventCard } from '@/components/event-card';
 import { EventFilters } from '@/components/event-filters';
-import { events } from '@/lib/placeholder-data';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { EventsCarousel } from '@/components/events-carousel';
 import { EventCardSkeleton } from '@/components/event-card-skeleton';
 import { Sparkles, Calendar, Users, Ticket, ArrowDown } from 'lucide-react';
 
-function FilteredEventList({ events, imageMap }: { events: any[], imageMap: any }) {
+import { createClient } from '@/lib/supabase/client';
+
+function FilteredEventList({ events }: { events: any[] }) {
   const searchParams = useSearchParams();
   const query = searchParams.get('q')?.toLowerCase() || '';
   const category = searchParams.get('category') || 'all';
@@ -18,7 +19,7 @@ function FilteredEventList({ events, imageMap }: { events: any[], imageMap: any 
 
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.name.toLowerCase().includes(query) || 
-                          event.description.toLowerCase().includes(query) ||
+                          (event.description || '').toLowerCase().includes(query) ||
                           event.location.toLowerCase().includes(query);
     const matchesCategory = category === 'all' || event.category === category;
     const matchesLocation = location === 'all' || event.location.includes(location);
@@ -38,14 +39,13 @@ function FilteredEventList({ events, imageMap }: { events: any[], imageMap: any 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredEvents.map((event, index) => {
-            const image = imageMap.get(event.image);
             return (
             <div
                 key={event.id}
                 className="animate-fade-in-up"
                 style={{ animationDelay: `${index * 80}ms` }}
             >
-                <EventCard event={event} image={image} />
+                <EventCard event={event} />
             </div>
             );
         })}
@@ -54,11 +54,22 @@ function FilteredEventList({ events, imageMap }: { events: any[], imageMap: any 
 }
 
 export default function Home() {
-  const imageMap = new Map(PlaceHolderImages.map((img) => [img.id, img]));
   const [isLoading, setIsLoading] = useState(true);
   const [scrollY, setScrollY] = useState(0);
-
+  const [events, setEvents] = useState<any[]>([]);
+  
   useEffect(() => {
+    const fetchEvents = async () => {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('events').select('*');
+        if (data) {
+            setEvents(data);
+        }
+        setIsLoading(false);
+    };
+
+    fetchEvents();
+
     const handleScroll = () => {
       requestAnimationFrame(() => {
         setScrollY(window.scrollY);
@@ -67,18 +78,13 @@ export default function Home() {
     
     window.addEventListener("scroll", handleScroll, { passive: true });
     
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
-    
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      clearTimeout(timer);
     };
   }, []);
 
   // Filter events for different sections
-  const featuredEvents = events.slice(0, 5); // Just an example subset
+  const featuredEvents = events.slice(0, 5);
   const upcomingEvents = events.filter(e => new Date(e.date) > new Date());
 
   return (
@@ -182,7 +188,7 @@ export default function Home() {
                     ))}
                 </div>
             }>
-                <FilteredEventList events={events} imageMap={imageMap} />
+                <FilteredEventList events={events} />
             </Suspense>
         )}
       </div>

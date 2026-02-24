@@ -1,9 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Calendar, MapPin } from 'lucide-react';
-
-import type { Event } from '@/lib/placeholder-data';
-import type { ImagePlaceholder } from '@/lib/placeholder-images';
 import {
   Card,
   CardContent,
@@ -11,28 +8,28 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { slugify } from '@/lib/slug';
 
 type EventCardProps = {
-  event: Event;
-  image?: ImagePlaceholder;
+  event: any;
 };
 
-export function EventCard({ event, image }: EventCardProps) {
+export function EventCard({ event }: EventCardProps) {
+  const eventSlug = slugify(event.name, event.id);
+  const imageUrl = event.image_url || '/placeholder.png';
+  
   return (
     <Card className="group flex flex-col overflow-hidden transition-all duration-500 hover:shadow-glow-sm border-white/5 hover:border-purple-500/20 bg-card/50 backdrop-blur-sm hover:-translate-y-2">
-      <Link href={`/events/${event.id}`} className="flex flex-col h-full">
+      <Link href={`/events/${eventSlug}`} className="flex flex-col h-full">
         <CardHeader className="p-0">
           <div className="relative h-48 w-full overflow-hidden">
-            {image && (
               <Image
-                src={image.imageUrl}
+                src={imageUrl}
                 alt={event.name}
                 fill
                 className="object-cover transition-transform duration-700 group-hover:scale-110"
-                data-ai-hint={image.imageHint}
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               />
-            )}
             {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-500" />
 

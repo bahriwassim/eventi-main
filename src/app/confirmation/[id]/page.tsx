@@ -7,8 +7,6 @@ import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 import { createClient } from '@/lib/supabase/client';
 
-import { events, users } from '@/lib/placeholder-data';
-import type { Event, Ticket, User as DemoUser } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
 import { QrCode } from '@/components/qr-code';
 import { useUser } from '@/hooks/use-user';
@@ -18,15 +16,20 @@ type ConfirmationPageProps = {
   params: { id: string };
 };
 
-export default function ConfirmationPage({ params }: ConfirmationPageProps) {
+export default function ConfirmationPage() {
+  const params = useParams<{ id: string }>();
   const { user, loading } = useUser();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClient();
+  // Ensure supabase client is stable across renders
+  const [supabase] = useState(() => createClient());
 
   const quantity = searchParams.get('quantity') ? parseInt(searchParams.get('quantity') as string, 10) : 1;
   const [ticket, setTicket] = useState<any>(null);
   const [loadingTicket, setLoadingTicket] = useState(true);
+
+  const [event, setEvent] = useState<any>(null);
+  const [loadingEvent, setLoadingEvent] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -36,16 +39,6 @@ export default function ConfirmationPage({ params }: ConfirmationPageProps) {
     const fetchTicket = async () => {
         if (!user) return;
         
-        // Try to find in placeholder data first (for demo users)
-        const demoUser = users.find(u => u.email === user.email);
-        const placeholderTicket = demoUser?.purchasedTickets.find((t) => t.eventId === params.id);
-        
-        if (placeholderTicket) {
-            setTicket(placeholderTicket);
-            setLoadingTicket(false);
-            return;
-        }
-
         // Fetch from Supabase
         const { data, error } = await supabase
             .from('tickets')
@@ -57,11 +50,22 @@ export default function ConfirmationPage({ params }: ConfirmationPageProps) {
             .maybeSingle();
             
         if (data) {
+            // Fetch event details for the ticket
+            const { data: eventData } = await supabase
+                .from('events')
+                .select('*')
+                .eq('id', params.id)
+                .single();
+            
+            if (eventData) {
+                setEvent(eventData);
+            }
+            
             // Map DB ticket to UI ticket format
             setTicket({
                 ticketId: data.id,
                 eventId: data.event_id,
-                eventName: events.find(e => e.id === params.id)?.name || 'Événement',
+                eventName: eventData?.name || 'Événement',
                 purchaseDate: data.purchase_date,
                 qrCodeValue: data.qr_code_value || `EVENTI-${data.event_id}-${data.id}-${user.id}`
             });
@@ -69,7 +73,7 @@ export default function ConfirmationPage({ params }: ConfirmationPageProps) {
            // Check localStorage for simulated tickets
            const localTickets = JSON.parse(localStorage.getItem('eventi_local_tickets') || '[]');
            // Check user metadata for simulated tickets
-           const metaTickets = user.user_metadata?.tickets || [];
+           const metaTickets = (user.user_metadata && user.user_metadata.tickets) ? user.user_metadata.tickets : [];
            
            const allSimulatedTickets = [...localTickets, ...metaTickets];
            
@@ -79,45 +83,51 @@ export default function ConfirmationPage({ params }: ConfirmationPageProps) {
                 .sort((a: any, b: any) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())[0];
            
            if (localTicket) {
+                // Fetch event details for the local ticket
+                const { data: eventData } = await supabase
+                    .from('events')
+                    .select('*')
+                    .eq('id', params.id)
+                    .single();
+                
+                if (eventData) {
+                    setEvent(eventData);
+                }
+                
                 setTicket({
                     ticketId: localTicket.id,
                     eventId: localTicket.event_id,
-                    eventName: events.find(e => e.id === params.id)?.name || 'Événement',
+                    eventName: eventData?.name || 'Événement',
                     purchaseDate: localTicket.purchase_date,
                     qrCodeValue: localTicket.qr_code_value
-                });
-           } else if (['1', '2', '3', '4', '5', '7', '9', '10', '11', '12', '13', '14'].includes(params.id)) {
-                // Fallback for placeholder events if DB insert was simulated AND not found in local storage (edge case)
-                setTicket({
-                        ticketId: `SIM-${Math.floor(Math.random() * 10000)}`,
-                        eventId: params.id,
-                        eventName: events.find(e => e.id === params.id)?.name || 'Événement',
-                        purchaseDate: new Date().toISOString(),
-                        qrCodeValue: `EVENTI-${params.id}-SIM-${user.id}`
                 });
            }
         }
         
         setLoadingTicket(false);
+        
+        // If no ticket found, show error message
+        if (!data && !localTicket) {
+            console.error('No ticket found for this event and user');
+            // You could redirect to an error page or show a message
+        }
     };
 
     if (user) {
         fetchTicket();
     }
   }, [user, loading, router, params.id, supabase]);
-
-  const event = events.find((e) => e.id === params.id);
   
   // Use real user data if available, otherwise fall back to demo structure for PDF generation types
   const displayUser = user ? {
       id: user.id,
-      name: user.displayName || user.email?.split('@')[0] || 'Client',
+      name: (user.user_metadata && user.user_metadata.full_name) ? user.user_metadata.full_name : (user.email ? user.email.split('@')[0] : 'Client'),
       email: user.email || '',
-      photoURL: user.photoURL || '',
+      photoURL: (user.user_metadata && user.user_metadata.avatar_url) ? user.user_metadata.avatar_url : '',
       purchasedTickets: []
   } : null;
 
-  const generatePDF = async (event: Event, ticket: any, user: any, quantity: number) => {
+  const generatePDF = async (event: any, ticket: any, user: any, quantity: number) => {
     const doc = new jsPDF();
 
     doc.addFont('Helvetica', 'Helvetica', 'normal');
@@ -136,10 +146,10 @@ export default function ConfirmationPage({ params }: ConfirmationPageProps) {
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(12);
     doc.setTextColor(100, 116, 139);
-    doc.text(`Date : ${new Date(event.date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`, 20, 70);
-    doc.text(`Heure : ${event.time}`, 20, 78);
-    doc.text(`Lieu : ${event.location}`, 20, 86);
-    doc.text(`Catégorie : ${event.category}`, 20, 94);
+    doc.text(new Date(event.date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), 20, 70);
+    doc.text(`Heure : ${event.time || 'Non spécifié'}`, 20, 78);
+    doc.text(`Lieu : ${event.location || 'Non spécifié'}`, 20, 86);
+    doc.text(`Catégorie : ${event.category || 'Non spécifié'}`, 20, 94);
 
     doc.setLineWidth(0.5);
     doc.line(20, 105, 190, 105);
@@ -159,13 +169,13 @@ export default function ConfirmationPage({ params }: ConfirmationPageProps) {
     doc.setTextColor(100, 116, 139);
     doc.text("Date d'achat :", 20, 157);
     doc.setTextColor(15, 23, 42);
-    doc.text(new Date(ticket.purchaseDate).toLocaleDateString('fr-FR'), 20, 164);
+    doc.text(ticket.purchaseDate ? new Date(ticket.purchaseDate).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR'), 20, 164);
 
     doc.setTextColor(100, 116, 139);
     doc.text('Prix Unitaire :', 20, 174);
     doc.setTextColor(15, 23, 42);
     doc.setFont('Helvetica', 'bold');
-    doc.text(`${event.price.toFixed(2)} TND`, 20, 181);
+    doc.text(`${(event.price || 0).toFixed(2)} TND`, 20, 181);
 
     doc.setTextColor(100, 116, 139);
     doc.text('Quantité :', 100, 174);
@@ -215,7 +225,17 @@ export default function ConfirmationPage({ params }: ConfirmationPageProps) {
   }
 
   if (!event || !ticket || !displayUser) {
-    return notFound();
+    return (
+      <div className="container mx-auto px-4 py-12 max-w-2xl text-center">
+        <div className="rounded-2xl glass border-white/5 p-8">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Aucun billet trouvé</h1>
+          <p className="text-muted-foreground mb-6">Nous n'avons pas trouvé de billet pour cet événement. Veuillez vérifier votre historique de commandes.</p>
+          <Button onClick={() => router.push('/profile')} className="bg-gradient-primary hover:opacity-90">
+            Voir mes billets
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -247,8 +267,8 @@ export default function ConfirmationPage({ params }: ConfirmationPageProps) {
             </div>
             <div className="space-y-1.5">
               <h3 className="font-bold text-lg text-foreground font-headline">{event.name}</h3>
-              <p className="text-sm text-muted-foreground">{new Date(event.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {event.time}</p>
-              <p className="text-sm text-muted-foreground">{event.location}</p>
+              <p className="text-sm text-muted-foreground">{new Date(event.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {event.time || 'Non spécifié'}</p>
+              <p className="text-sm text-muted-foreground">{event.location || 'Non spécifié'}</p>
               <p className="text-xs text-primary mt-2 font-medium">ID du billet: {ticket.ticketId} (x{quantity})</p>
             </div>
           </div>

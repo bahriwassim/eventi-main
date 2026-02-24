@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, FileText } from "lucide-react";
 import jsPDF from "jspdf";
-import { events, users } from "@/lib/placeholder-data";
 
 export default function SuperAdminReportsPage() {
+  const [events, setEvents] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   const generateSimplePDFReport = () => {
     const doc = new jsPDF();
@@ -28,7 +29,8 @@ export default function SuperAdminReportsPage() {
     doc.setFont('Helvetica', 'bold');
     doc.text("Résumé des Ventes", 20, 50);
 
-    const allSales = users.flatMap(user => user.purchasedTickets);
+    // For now, use empty data since we're removing demo data
+    const allSales: any[] = [];
     let y = 60;
     let totalRevenue = 0;
 

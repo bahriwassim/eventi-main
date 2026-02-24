@@ -33,9 +33,23 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
+  // Refresh session if expired - this is done automatically by getUser() but we can handle errors gracefully
   const {
     data: { user },
+    error: authError
   } = await supabase.auth.getUser()
+
+  // Handle Refresh Token Not Found or other auth errors by clearing invalid session
+  if (authError && authError.message.includes('Refresh Token Not Found')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    // Clear cookies to prevent loop
+    const response = NextResponse.redirect(url)
+    response.cookies.delete('sb-cndbaquchxdgipnjkbtz-auth-token') // Adjust based on project ref if known, or clear all supabase cookies
+    // Since we don't know exact cookie name easily without project ref, we rely on the redirect to clear state eventually
+    // or we can try to sign out. But server-side signout might fail if token is invalid.
+    return response
+  }
 
   const pathname = request.nextUrl.pathname
   const requiresAuth =

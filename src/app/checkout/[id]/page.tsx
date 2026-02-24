@@ -1,8 +1,7 @@
 'use client';
 
-import { notFound, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { events } from '@/lib/placeholder-data';
+import { notFound, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,40 +14,94 @@ import { useUser } from '@/hooks/use-user';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PrivacyPolicyContent } from '@/components/privacy-policy-content';
+import { slugify, getIdFromSlug } from '@/lib/slug';
 
 type CheckoutPageProps = {
   params: { id: string };
   searchParams?: { [key: string]: string | string[] | undefined };
 };
 
-export default function CheckoutPage({ params, searchParams }: CheckoutPageProps) {
-  const event = events.find((e) => e.id === params.id);
+export default function CheckoutPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
   const router = useRouter();
-  const supabase = createClient();
+  const params = useParams<{ id: string }>();
+  // Ensure supabase client is stable across renders to prevent unnecessary re-runs
+  const [supabase] = useState(() => createClient());
   const { toast } = useToast();
   const { user } = useUser();
+  
+  const [event, setEvent] = useState<any>(null);
+  const [loadingEvent, setLoadingEvent] = useState(true);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [acceptPolicy, setAcceptPolicy] = useState(false);
   const [policyOpen, setPolicyOpen] = useState(false);
 
-  if (!event) {
-    notFound();
-  }
+  // Redirect if user is not logged in and trying to access checkout
+  useEffect(() => {
+    // This effect is primarily for logging, not redirection.
+    // The UI will conditionally render a login/signup form if the user is not present.
+    if (!user && !loadingEvent) {
+      console.log('User not logged in, checkout page will show login/signup form.');
+    }
+  }, [user, loadingEvent]);
+
+  // Fetch Event Data
+  useEffect(() => {
+    const controller = new AbortController();
+    const signal = controller.signal;
+
+    const fetchEvent = async () => {
+      const id = getIdFromSlug(params.id);
+      
+      try {
+        // Try DB first
+        const { data: dbEvent, error } = await supabase
+          .from('events')
+          .select(`
+              *,
+              ticket_types (*)
+          `)
+          .eq('id', id)
+          .single();
+          
+        if (signal.aborted) return;
+
+        if (dbEvent) {
+          setEvent(dbEvent);
+        } else {
+          // Not found anywhere
+          setEvent(null);
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          console.error("Fetch event error:", error);
+        }
+      } finally {
+        if (!signal.aborted) {
+          setLoadingEvent(false);
+        }
+      }
+    };
+    
+    fetchEvent().catch(err => {
+      // Safety net for unhandled rejections
+      if (err.name !== 'AbortError') {
+         console.error("Unhandled error in fetchEvent:", err);
+      }
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [params.id, supabase]);
 
   const [quantity, setQuantity] = useState(searchParams?.quantity ? parseInt(searchParams.quantity as string) : 1);
   const selectedType = searchParams?.type as string || 'Billet Standard';
-  const urlPrice = searchParams?.price ? parseFloat(searchParams.price as string) : null;
-  const ticketPrice = urlPrice ?? event.price;
-
+  
   // Form State
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [attendeeNames, setAttendeeNames] = useState<string[]>(Array(quantity).fill(''));
-  const [cardName, setCardName] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvc, setCvc] = useState('');
-
   const [password, setPassword] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(false);
 
@@ -68,17 +121,49 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
   useEffect(() => {
     if (user) {
       if (!email) setEmail(user.email || '');
-      if (!phone) setPhone(user.phone || user.user_metadata?.phone_number || '');
+      if (!phone) setPhone(user.phone || (user.user_metadata && user.user_metadata.phone_number) || '');
       setAttendeeNames(prev => {
         const newNames = [...prev];
         if (newNames.length > 0 && !newNames[0]) {
-          newNames[0] = user.displayName || user.user_metadata?.full_name || '';
+          newNames[0] = (user.user_metadata && user.user_metadata.full_name) || '';
         }
         return newNames;
       });
     }
-  }, [user]);
+  }, [user, email, phone]);
 
+  if (loadingEvent) {
+      return (
+          <div className="flex items-center justify-center min-h-screen">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+      );
+  }
+
+  if (!event) {
+    notFound();
+    return null;
+  }
+
+  // Calculate ticket price securely
+  let ticketPrice = event.price;
+  let ticketTypeId: string | null = null;
+
+  if (event.ticket_types && event.ticket_types.length > 0) {
+      // Find matching ticket type
+      // Check both exact name match or if selectedType is a key/ID
+      const typeObj = event.ticket_types.find((t: any) => t.name === selectedType || t.id === selectedType);
+      
+      if (typeObj) {
+          ticketPrice = typeObj.price;
+          ticketTypeId = typeObj.id;
+      }
+  } else {
+      // Legacy/Placeholder logic: trust URL or event.price
+       const urlPrice = searchParams?.price ? parseFloat(searchParams.price as string) : null;
+       if (urlPrice && !isNaN(urlPrice)) ticketPrice = urlPrice;
+  }
+  
   const subtotal = ticketPrice * quantity;
   const fees = subtotal * 0.07;
   const total = subtotal + fees;
@@ -98,6 +183,32 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
       return;
     }
 
+    // Basic Validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^\+?[0-9\s-]{8,}$/;
+
+    if (!user) {
+        if (!email || !emailRegex.test(email)) {
+            toast({ variant: "destructive", title: "Email invalide", description: "Veuillez entrer une adresse email valide." });
+            return;
+        }
+        if (!password || password.length < 6) {
+            toast({ variant: "destructive", title: "Mot de passe court", description: "Le mot de passe doit contenir au moins 6 caractères." });
+            return;
+        }
+    }
+
+    if (phone && !phoneRegex.test(phone)) {
+        toast({ variant: "destructive", title: "Téléphone invalide", description: "Veuillez entrer un numéro de téléphone valide." });
+        return;
+    }
+
+    // Validate attendee names
+    if (attendeeNames.some(name => !name.trim())) {
+        toast({ variant: "destructive", title: "Noms manquants", description: "Veuillez renseigner le nom de chaque participant." });
+        return;
+    }
+
     setIsProcessing(true);
 
     try {
@@ -112,57 +223,41 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
         }
 
         if (isLoginMode) {
-          // Login
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
-          if (error) throw error;
-          userId = data.user.id;
-        } else {
-          // Signup
-          const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                full_name: attendeeNames[0] || email.split('@')[0],
-                phone_number: phone,
-              }
-            }
-          });
-          if (error) throw error;
-          userId = data.user?.id;
-          
-          if (!userId) {
-            toast({ title: "Inscription réussie", description: "Veuillez vérifier votre email pour confirmer votre compte." });
-            // If email confirmation is required, we can't proceed with ticket creation immediately unless we use a service role or wait.
-            // For now, let's assume we stop here or handle it.
-            setIsProcessing(false);
-            return; 
-          }
-        }
+        // Login
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        userId = data.user.id;
       } else {
-        // User is already logged in, just ensure we have the ID (which we do from useUser)
-        // No need to do anything special unless we want to update phone/name if missing
+        // Signup
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: attendeeNames[0] || email.split('@')[0],
+              phone_number: phone,
+            }
+          }
+        });
+        if (error) throw error;
+        userId = data.user?.id;
+        
+        if (!userId) {
+          toast({ title: "Inscription réussie", description: "Veuillez vérifier votre email pour confirmer votre compte." });
+          // If email confirmation is required, we can't proceed with ticket creation immediately unless we use a service role or wait.
+          // For now, let's assume we stop here or handle it.
+          setIsProcessing(false);
+          return; 
+        }
+      }
       }
 
       // Create tickets in DB
-      // Note: We use a static UUID for placeholder events to avoid "invalid input syntax for type uuid" error
-      // In a real app with real events in DB, event.id would already be a UUID.
-      const isPlaceholderEvent = ['1', '2', '3', '4', '5', '7', '9', '10', '11', '12', '13', '14'].includes(event.id);
-      
-      // If it's a placeholder event, we try to use a dummy UUID if possible or just log it.
-      // However, to make the insert work without crashing on UUID type check, we need a valid UUID.
-      // Since we can't insert a non-UUID into a UUID column, and we can't change the DB schema easily here,
-      // we will generate a random UUID for the event_id if it's a placeholder.
-      // This means the foreign key constraint will fail if we enforce it. 
-      // Let's check if we can actually insert.
-      
-      // Strategy: Since we are in a demo mode with placeholder data but a real DB schema,
-      // we should probably not try to insert into the real 'tickets' table if the event doesn't exist in 'events' table.
-      // But the user wants to see "Paiement réussi".
-      // So we will just simulate the success if it's a placeholder event.
+      // Use the actual ID (DB or Placeholder)
+      const isPlaceholderEvent = !event.id || event.id.startsWith('placeholder-') || ['1', '2', '3', '4', '5', '7', '9', '10', '11', '12', '13', '14'].includes(event.id);
       
       if (isPlaceholderEvent) {
         // Simulate success for placeholder events
@@ -182,8 +277,8 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
         localStorage.setItem('eventi_local_tickets', JSON.stringify([...localTickets, ...newLocalTickets]));
 
         // PERSISTENCE HACK: Also save to user metadata so it works across devices/incognito
-        if (user) {
-            const currentMetaTickets = user.user_metadata?.tickets || [];
+        if (user && user.user_metadata) {
+            const currentMetaTickets = user.user_metadata.tickets || [];
             await supabase.auth.updateUser({
                 data: {
                     tickets: [...currentMetaTickets, ...newLocalTickets]
@@ -196,7 +291,8 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
           event_id: event.id,
           user_id: userId,
           price_paid: ticketPrice,
-          status: 'valid'
+          status: 'valid',
+          ticket_type_id: ticketTypeId
         }));
   
         const { error } = await supabase.from('tickets').insert(ticketsToInsert);
@@ -204,7 +300,17 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
       }
 
       toast({ title: "Paiement réussi", description: "Vos billets ont été générés." });
-      router.push(`/confirmation/${event.id}?type=${selectedType}&price=${ticketPrice}&quantity=${quantity}`);
+      
+      // Force refresh of the session/page state before navigating
+      router.refresh();
+      
+      // Try to redirect to confirmation page, fallback to tickets page if it doesn't exist
+      try {
+        router.push(`/confirmation/${event.id}?type=${selectedType}&price=${ticketPrice}&quantity=${quantity}`);
+      } catch (error) {
+        console.warn('Confirmation page not found, redirecting to profile page');
+        router.push('/profile');
+      }
     } catch (error: any) {
       console.error('Payment error:', error);
       toast({ variant: "destructive", title: "Erreur", description: error.message || "Une erreur est survenue." });
@@ -220,7 +326,7 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
       </div>
 
       <div className="container mx-auto px-4 py-12 max-w-4xl">
-        <Link href={`/events/${event.id}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-8 group">
+        <Link href={`/events/${slugify(event.name, event.id)}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-8 group">
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
           Retour à l&apos;événement
         </Link>
@@ -346,7 +452,7 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
                         </Label>
                         <Input 
                           id={`name-${index}`} 
-                          placeholder="Flen ben Foulen " 
+                          placeholder="Nom et Prénom" 
                           className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
                           required
                           value={attendeeNames[index] || ''}
@@ -363,12 +469,9 @@ export default function CheckoutPage({ params, searchParams }: CheckoutPageProps
                     <Input 
                       id="email" 
                       type="email" 
-                      placeholder="amina@example.com" 
-                      className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" 
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
                       readOnly
-                      disabled
+                      className="bg-white/5 border-white/10 opacity-70 cursor-not-allowed" 
                     />
                   </div>
                   <div className="space-y-2">

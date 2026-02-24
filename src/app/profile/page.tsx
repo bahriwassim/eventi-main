@@ -1,8 +1,6 @@
 'use client';
 
 import Image from 'next/image';
-import { users, events } from '@/lib/placeholder-data';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { FileText, MapPin, Calendar, Edit, Loader2, Ticket, User, Mail, Phone } from 'lucide-react';
@@ -25,10 +23,6 @@ import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ProfilePage() {
-  const userAvatar = PlaceHolderImages.find((img) => img.id === 'user-avatar');
-  const eventImageMap = new Map(PlaceHolderImages.map((img) => [img.id, img]));
-  const eventMap = new Map(events.map((evt) => [evt.id, evt]));
-
   const { user, loading } = useUser();
   const router = useRouter();
   const { toast } = useToast();
@@ -52,70 +46,55 @@ export default function ProfilePage() {
     }
     if (user) {
       setProfileData({
-        displayName: user.displayName || '',
+        displayName: user.user_metadata && user.user_metadata.full_name ? user.user_metadata.full_name : '',
         email: user.email || '',
-        phone: user.user_metadata?.phone || '',
-        address: user.user_metadata?.address || ''
+        phone: user.user_metadata && user.user_metadata.phone_number ? user.user_metadata.phone_number : '',
+        address: user.user_metadata && user.user_metadata.address ? user.user_metadata.address : ''
       });
 
       // Fetch tickets from Supabase
       const fetchTickets = async () => {
         setLoadingTickets(true);
         try {
-            // We need to fetch tickets and join with events to get event details
-            // Since Supabase join syntax depends on foreign keys, and we know we have them:
-            // tickets.event_id -> events.id
-            
-            // Note: In a real production app with typed client, we would have better types.
-            // Here we try to fetch tickets and manually map/fetch events if needed or use select with join.
-            
-            // Let's try to fetch tickets first.
+            // Fetch tickets first.
             const { data: ticketsData, error: ticketsError } = await supabase
               .from('tickets')
               .select('*')
               .eq('user_id', user.id)
               .order('purchase_date', { ascending: false });
 
-            // Get local tickets for placeholder events (from localStorage)
-            const localTickets = JSON.parse(localStorage.getItem('eventi_local_tickets') || '[]');
-            const userLocalTickets = localTickets.filter((t: any) => t.user_id === user.id);
-            
-            // Get cloud-persisted placeholder tickets (from user metadata)
-            const metaTickets = user.user_metadata?.tickets || [];
-            
-            // Merge and de-duplicate tickets based on ID
-            const combinedPlaceholderTickets = [...userLocalTickets, ...metaTickets];
-            const uniquePlaceholderTickets = Array.from(new Map(combinedPlaceholderTickets.map(item => [item.id, item])).values());
+            if (ticketsError) throw ticketsError;
 
-            // Merge real and local/meta tickets
-            const mergedTickets = [...(ticketsData || []), ...uniquePlaceholderTickets];
+            if (ticketsData && ticketsData.length > 0) {
+              // Fetch event details for each ticket
+              const eventIds = ticketsData.map(t => t.event_id);
+              const { data: eventsData, error: eventsError } = await supabase
+                .from('events')
+                .select('*')
+                .in('id', eventIds);
+              
+              if (eventsError) throw eventsError;
 
-            if (mergedTickets.length > 0) {
-                // Since we might be using placeholder events (IDs 1-14) which might NOT be in the DB events table yet
-                // (unless we seeded them), we have a mix. 
-                // If the event_id corresponds to a placeholder event, we get details from placeholder-data.
-                // If it's a real UUID event, we should technically fetch it from DB.
+              // Create a map of events for quick lookup
+              const eventsMap = new Map(eventsData?.map(e => [e.id, e]) || []);
+              
+              // Map tickets with their event details
+              const mappedTickets = ticketsData.map(t => {
+                const eventDetails = eventsMap.get(t.event_id);
                 
-                // For now, let's map the tickets to the format the UI expects.
-                const mappedTickets = mergedTickets.map(t => {
-                    // Try to find in placeholder events first (for hybrid approach)
-                    let eventDetails = events.find(e => e.id === t.event_id);
-                    
-                    // If not found in placeholder, maybe it's in DB? 
-                    // For this specific task, user is likely buying placeholder events.
-                    
-                    return {
-                        ticketId: t.id,
-                        eventId: t.event_id,
-                        eventName: eventDetails?.name || 'Événement Inconnu',
-                        purchaseDate: t.purchase_date,
-                        qrCodeValue: t.qr_code_value || `EVENTI-${t.event_id}-${t.id}-${user.id}`,
-                        event: eventDetails // Keep reference to full event object for UI
-                    };
-                });
-                // Sort by date (descending)
-                mappedTickets.sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
-                setRealTickets(mappedTickets);
+                return {
+                  ticketId: t.id,
+                  eventId: t.event_id,
+                  eventName: eventDetails?.name || 'Événement Inconnu',
+                  purchaseDate: t.purchase_date,
+                  qrCodeValue: t.qr_code_value || `EVENTI-${t.event_id}-${t.id}-${user.id}`,
+                  event: eventDetails // Keep reference to full event object for UI
+                };
+              });
+              
+              // Sort by date (descending)
+              mappedTickets.sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+              setRealTickets(mappedTickets);
             }
         } catch (err) {
             console.error("Error fetching tickets:", err);
@@ -129,11 +108,12 @@ export default function ProfilePage() {
   }, [user, loading, router, supabase]);
 
   const handleUpdateProfile = async () => {
+    if (!user) return;
     try {
-        const { error } = await supabase.auth.updateUser({
+        const { data: updatedUser, error } = await supabase.auth.updateUser({
             data: { 
-                display_name: profileData.displayName,
-                phone: profileData.phone,
+                full_name: profileData.displayName,
+                phone_number: profileData.phone,
                 address: profileData.address
             }
         });
@@ -142,41 +122,26 @@ export default function ProfilePage() {
 
         toast({ title: "Profil mis à jour", description: "Vos informations ont été modifiées avec succès." });
         setIsEditProfileOpen(false);
-        window.location.reload(); 
+        
+        // Manually update user state to reflect changes without a full reload
+        if (updatedUser?.user) {
+            // This is a bit of a hack. A proper solution would involve a global state management (like Zustand or React Context)
+            // that the useUser hook would subscribe to. For now, we can just update the local state.
+            setProfileData({
+                displayName: updatedUser.user.user_metadata.full_name || '',
+                email: updatedUser.user.email || '',
+                phone: updatedUser.user.user_metadata.phone_number || '',
+                address: updatedUser.user.user_metadata.address || ''
+            });
+        }
+
     } catch (error: any) {
         toast({ variant: "destructive", title: "Erreur", description: error.message });
     }
   };
 
-  const demoUser = user ? users.find(u => u.email === user.email) : null;
-  // Combine placeholder tickets (for demo users) with real tickets from DB
-  const placeholderTickets = demoUser ? demoUser.purchasedTickets : [];
-  
-  // Create a unified ticket list
-  // Map real tickets to match the structure if needed, but we already did that in fetchTickets
-  // We need to be careful with types.
-  // Let's just use realTickets as the source of truth for "My Tickets" for new users.
-  // If we want to support the demo user seeing their hardcoded tickets, we can merge.
-  
-  const allTickets = [...realTickets];
-  
-  // If it's a demo user, add their placeholder tickets if not already present (by ID check maybe?)
-  // For simplicity, let's just append them.
-  if (demoUser && realTickets.length === 0) {
-      // Only show placeholder tickets if no real tickets found? 
-      // Or just merge them.
-      placeholderTickets.forEach(pt => {
-          const eventDetails = events.find(e => e.id === pt.eventId);
-          allTickets.push({
-              ticketId: pt.ticketId,
-              eventId: pt.eventId,
-              eventName: pt.eventName,
-              purchaseDate: pt.purchaseDate,
-              qrCodeValue: pt.qrCodeValue,
-              event: eventDetails
-          });
-      });
-  }
+  // Use only real tickets from database
+  const allTickets = realTickets;
 
   // We should not block the render if loadingTickets is true but we have user data.
   // Instead, show a loading state for the tickets section or just render empty and let useEffect fill it.
@@ -204,27 +169,26 @@ export default function ProfilePage() {
               <div className="relative inline-block mb-4">
                 <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-fuchsia-500 rounded-full opacity-60 blur-sm" />
                 <Avatar className="w-24 h-24 relative ring-4 ring-background shadow-xl">
-                  {/* Prioritize user avatar if available, otherwise show placeholder, but remove hardcoded placeholder logic if desired */}
-                  {user.photoURL ? <AvatarImage src={user.photoURL} alt={user.displayName || 'User'} /> : null}
+                  {/* Avatar completely removed as requested */}
                   <AvatarFallback className="bg-slate-200 text-slate-500 flex items-center justify-center">
                     <User className="h-12 w-12" />
                   </AvatarFallback>
                 </Avatar>
               </div>
-              <h2 className="text-xl font-bold font-headline text-foreground">{user.displayName || 'Utilisateur'}</h2>
-              <p className="text-sm text-muted-foreground mt-1">{user.email}</p>
+              <h2 className="text-xl font-bold font-headline text-foreground">{profileData.displayName || 'Utilisateur'}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{profileData.email}</p>
               
               <div className="mt-6 space-y-3 text-left">
-                  {user.user_metadata?.phone && (
+                  {profileData.phone && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Phone className="h-4 w-4 text-primary" />
-                          <span>{user.user_metadata.phone}</span>
+                          <span>{profileData.phone}</span>
                       </div>
                   )}
-                  {user.user_metadata?.address && (
+                  {profileData.address && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <MapPin className="h-4 w-4 text-primary" />
-                          <span>{user.user_metadata.address}</span>
+                          <span>{profileData.address}</span>
                       </div>
                   )}
               </div>
@@ -298,21 +262,19 @@ export default function ProfilePage() {
             {allTickets.length > 0 ? (
               <div className="space-y-4">
                 {allTickets.map((ticket, index) => {
-                  const event = ticket.event || eventMap.get(ticket.eventId);
-                  const eventImage = event ? eventImageMap.get(event.image) : undefined;
+                  const event = ticket.event;
                   if (!event) return null;
 
                   return (
                     <div key={ticket.ticketId} className="rounded-xl overflow-hidden border border-white/5 bg-card/30 backdrop-blur-sm hover:border-purple-500/20 transition-all duration-300 animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
                       <div className="flex flex-col sm:flex-row">
-                        {eventImage && (
+                        {event.image_url && (
                           <div className="relative h-40 sm:h-auto sm:w-40 flex-shrink-0 overflow-hidden">
                             <Image
-                              src={eventImage.imageUrl}
+                              src={event.image_url}
                               alt={event.name}
                               fill
                               className="object-cover"
-                              data-ai-hint={eventImage.imageHint}
                             />
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent to-background/80 hidden sm:block" />
                           </div>

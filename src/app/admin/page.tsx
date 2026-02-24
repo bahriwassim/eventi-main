@@ -17,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { events } from "@/lib/placeholder-data";
 import { PlusCircle, Edit, Trash2, Download, DollarSign, X, Upload, FileText, Eye } from "lucide-react";
 import * as XLSX from 'xlsx';
 import {
@@ -31,9 +30,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 
@@ -90,10 +90,61 @@ export default function AdminDashboardPage() {
     image_url: ''
   });
   const supabase = createClient();
-
+  
+  // Add mounted ref to prevent state updates on unmounted component
+  const isMounted = useRef(true);
   useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Fetch Events from DB on mount
+  useEffect(() => {
+      fetchEvents();
       fetchCategories();
   }, []);
+
+  const [dbEvents, setDbEvents] = useState<any[]>([]);
+
+  const fetchEvents = async () => {
+      try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user && isMounted.current) {
+              const { data, error } = await supabase
+                  .from('events')
+                  .select(`
+                    *,
+                    tickets:tickets(count)
+                  `)
+                  .order('date', { ascending: true });
+              
+              if (error) {
+                  console.error("Error fetching events:", error);
+                  return;
+              }
+              
+              if (data && isMounted.current) {
+                  // Map the count from the join
+                  const eventsWithSales = data.map(event => {
+                      const sales = event.tickets ? event.tickets[0]?.count || 0 : 0;
+                      return { ...event, sales };
+                  });
+                  setDbEvents(eventsWithSales);
+              }
+          }
+      } catch (err) {
+          console.error("Error fetching events", err);
+      }
+  };
+
+  // Combine placeholder events with DB events for display
+  const allEvents = [...dbEvents]; // Only use DB events for admin dashboard to avoid confusion with placeholders
+
+
+  // ... inside handleAddEvent ...
+  // After success:
+  fetchEvents(); // Refresh list
 
   const fetchCategories = async () => {
       // Force loading default categories first to avoid empty state
@@ -101,7 +152,7 @@ export default function AdminDashboardPage() {
       
       try {
         const { data, error } = await supabase.from('categories').select('*').order('name');
-        if (!error && data && data.length > 0) {
+        if (!error && data && data.length > 0 && isMounted.current) {
             setCategories(data);
         }
       } catch (err) {
@@ -135,12 +186,45 @@ export default function AdminDashboardPage() {
     setIsAddEventOpen(true);
   };
 
-  const handleDetailsClick = (event: any) => {
+  const handleDetailsClick = async (event: any) => {
       setSelectedEvent(event);
-      // Generate mock clients for this event
-      const salesCount = Math.floor(Math.random() * (event.capacity || 100));
-      setEventClients(generateMockClients(event.id, salesCount));
       setIsDetailsOpen(true);
+      
+      // Fetch real clients from tickets table
+       try {
+         const { data: tickets, error } = await supabase
+             .from('tickets')
+             .select('*')
+             .eq('event_id', event.id);
+ 
+         if (tickets && tickets.length > 0) {
+             const userIds = tickets.map((t: any) => t.user_id);
+             const { data: profiles } = await supabase
+                .from('profiles')
+                .select('id, display_name, email')
+                .in('id', userIds);
+
+             const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+
+             const clients = tickets.map((t: any) => {
+                 const profile = profileMap.get(t.user_id);
+                 return {
+                    id: t.id,
+                    name: profile?.display_name || 'Inconnu',
+                    email: profile?.email || 'N/A', 
+                    ticketType: 'Standard', // TODO: Add ticket_type_id to tickets table
+                    price: t.price_paid,
+                    purchaseDate: t.purchase_date
+                 };
+             });
+             setEventClients(clients);
+         } else {
+             setEventClients([]);
+         }
+       } catch (err) {
+          console.error("Error fetching clients", err);
+          setEventClients([]);
+      }
   };
 
   const handleAddTicketType = () => {
@@ -167,109 +251,146 @@ export default function AdminDashboardPage() {
 
   const handleAddEvent = async () => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Utilisateur non connecté");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Utilisateur non connecté");
 
-        if (!posterFile && !editingEvent && !newEvent.image_url) {
-            toast({ variant: "destructive", title: "Image manquante", description: "Veuillez télécharger une affiche pour l'événement." });
-            return;
-        }
+      // Verify user is admin
+      const { data: admin } = await supabase.from('admins').select('*').eq('id', user.id).maybeSingle();
+      if (!admin) {
+        const { data: superAdmin } = await supabase.from('super_admins').select('*').eq('id', user.id).maybeSingle();
+        if (!superAdmin) throw new Error("Vous n'avez pas les droits d'administration");
+      }
 
-        setUploading(true);
-        let imageUrl = newEvent.image_url;
+      if (!posterFile && !editingEvent && !newEvent.image_url) {
+        toast({ variant: "destructive", title: "Image manquante", description: "Veuillez télécharger une affiche pour l'événement." });
+        return;
+      }
 
-        // Upload Image if selected
-        if (posterFile) {
-            const fileExt = posterFile.name.split('.').pop();
-            const fileName = `${Date.now()}.${fileExt}`;
-            const { error: uploadError } = await supabase.storage
-                .from('event-posters')
-                .upload(fileName, posterFile);
+      setUploading(true);
+      let imageUrl = newEvent.image_url;
 
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('event-posters')
-                .getPublicUrl(fileName);
-            
+      // Upload Image if selected
+      if (posterFile && isMounted.current) {
+        try {
+          const fileExt = posterFile.name.split('.').pop();
+          const fileName = `event-posters/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+          
+          // Create a timeout for the upload
+          const uploadPromise = supabase.storage
+            .from('images')
+            .upload(fileName, posterFile, {
+               cacheControl: '3600',
+               upsert: false
+            });
+          
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Upload timeout')), 30000)
+          );
+          
+          const result = await Promise.race([uploadPromise, timeoutPromise]);
+          
+          if (result && 'error' in result && result.error) {
+            throw result.error;
+          }
+          
+          const { data: { publicUrl } } = supabase.storage
+            .from('images')
+            .getPublicUrl(fileName);
+          
+          if (isMounted.current) {
             imageUrl = publicUrl;
+          }
+        } catch (uploadError) {
+          console.error('Upload error:', uploadError);
+          throw new Error("Erreur lors du téléchargement de l'image. Veuillez réessayer.");
         }
+      }
 
-        const eventData = {
-            name: newEvent.name,
-            category: newEvent.category,
-            date: newEvent.date,
-            time: newEvent.time,
-            location: newEvent.location,
-            price: parseFloat(newEvent.price),
-            capacity: parseInt(newEvent.capacity) || 100,
-            description: newEvent.description,
-            image_url: imageUrl,
-            admin_id: user.id
-        };
+      if (!isMounted.current) return;
 
-        let error;
-        let eventId;
+      const eventData = {
+        name: newEvent.name,
+        category: newEvent.category,
+        date: newEvent.date,
+        time: newEvent.time,
+        location: newEvent.location,
+        price: parseFloat(newEvent.price),
+        capacity: parseInt(newEvent.capacity) || 100,
+        description: newEvent.description,
+        image_url: imageUrl,
+        admin_id: user.id
+      };
 
-        if (editingEvent) {
-            const { error: updateError } = await supabase
-                .from('events')
-                .update(eventData)
-                .eq('id', editingEvent.id);
-            error = updateError;
-            eventId = editingEvent.id;
-        } else {
-            const { data: insertedEvent, error: insertError } = await supabase
-                .from('events')
-                .insert([eventData])
-                .select()
-                .single();
-            error = insertError;
-            eventId = insertedEvent?.id;
-        }
+      let error;
+      let eventId;
 
-        if (error) throw error;
+      if (editingEvent) {
+        const { error: updateError } = await supabase
+          .from('events')
+          .update(eventData)
+          .eq('id', editingEvent.id);
+        error = updateError;
+        eventId = editingEvent.id;
+      } else {
+        const { data: insertedEvent, error: insertError } = await supabase
+          .from('events')
+          .insert([eventData])
+          .select()
+          .single();
+        error = insertError;
+        eventId = insertedEvent?.id;
+      }
 
-        // Handle Ticket Types
-        if (eventId && ticketTypes.length > 0) {
-            if (editingEvent) {
-                await supabase.from('ticket_types').delete().eq('event_id', eventId);
-            }
+      if (error) throw error;
 
-            const typesToInsert = ticketTypes.map(t => ({
-                event_id: eventId,
-                name: t.name,
-                price: parseFloat(t.price),
-                capacity: parseInt(t.capacity),
-                remaining: parseInt(t.capacity)
-            }));
+      if (!isMounted.current) return;
 
-            const { error: typesError } = await supabase.from('ticket_types').insert(typesToInsert);
-            if (typesError) throw typesError;
-        }
+      // Handle Ticket Types
+      if (eventId && ticketTypes.length > 0 && isMounted.current) {
+          if (editingEvent) {
+              await supabase.from('ticket_types').delete().eq('event_id', eventId);
+          }
 
-        toast({ title: editingEvent ? "Événement modifié" : "Événement ajouté", description: "L'opération a réussi." });
-        setIsAddEventOpen(false);
-        setEditingEvent(null);
-        setTicketTypes([]);
-        setPosterFile(null);
-        setNewEvent({
-            name: '',
-            category: '',
-            date: '',
-            time: '',
-            location: '',
-            price: '',
-            capacity: '',
-            description: '',
-            image_url: ''
-        });
-        window.location.reload();
+          const typesToInsert = ticketTypes.map(t => ({
+              event_id: eventId,
+              name: t.name,
+              price: parseFloat(t.price),
+              capacity: parseInt(t.capacity),
+              remaining: parseInt(t.capacity)
+          }));
+
+          const { error: typesError } = await supabase.from('ticket_types').insert(typesToInsert);
+          if (typesError) throw typesError;
+      }
+
+      if (isMounted.current) {
+          toast({ title: editingEvent ? "Événement modifié" : "Événement ajouté", description: "L'opération a réussi." });
+          setIsAddEventOpen(false);
+          setEditingEvent(null);
+          setTicketTypes([]);
+          setPosterFile(null);
+          setNewEvent({
+              name: '',
+              category: '',
+              date: '',
+              time: '',
+              location: '',
+              price: '',
+              capacity: '',
+              description: '',
+              image_url: ''
+          });
+          fetchEvents(); // Refresh without reloading page
+      }
     } catch (error: any) {
         console.error('Error adding/editing event:', error);
-        toast({ variant: "destructive", title: "Erreur", description: error.message });
+        if (isMounted.current) {
+            toast({ variant: "destructive", title: "Erreur", description: error.message || "Une erreur inconnue s'est produite" });
+        }
     } finally {
-        setUploading(false);
+        if (isMounted.current) {
+            setUploading(false);
+        }
     }
   };
 
@@ -412,6 +533,11 @@ export default function AdminDashboardPage() {
                             <Input id="location" value={newEvent.location} onChange={(e) => setNewEvent({...newEvent, location: e.target.value})} className="bg-white/5 border-white/30 text-foreground" />
                         </div>
 
+                        <div className="grid gap-2">
+                            <Label htmlFor="description">Description</Label>
+                            <Textarea id="description" value={newEvent.description} onChange={(e) => setNewEvent({...newEvent, description: e.target.value})} className="bg-white/5 border-white/30 text-foreground" />
+                        </div>
+
                         {/* Ticket Types Section */}
                         <div className="border-t border-white/10 pt-4 mt-2">
                             <div className="flex items-center justify-between mb-3">
@@ -494,9 +620,9 @@ export default function AdminDashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {events.map((event) => {
-                // Mock sales data
-                const sales = Math.floor(Math.random() * (event.capacity || 100)); 
+              {allEvents.map((event) => {
+                // Use the stable sales data we calculated
+                const sales = event.sales || 0; 
                 const capacity = event.capacity || 100;
                 const percentage = Math.round((sales / capacity) * 100);
                 

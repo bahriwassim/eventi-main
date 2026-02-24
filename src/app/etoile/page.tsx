@@ -1,19 +1,42 @@
 'use client';
 
-import { events } from '@/lib/placeholder-data';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { EventCard } from '@/components/event-card';
-import { ArrowRight, Trophy, Users, Calendar, Star, Flame } from 'lucide-react';
+import { ArrowRight, Trophy, Users, Calendar, Star, Flame, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { createClient } from '@/lib/supabase/client';
+import { useState, useEffect } from 'react';
 
 export default function EtoilePage() {
-  const imageMap = new Map(PlaceHolderImages.map((img) => [img.id, img]));
-  
+  const supabase = createClient();
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('events')
+          .select('*')
+          .order('date', { ascending: true });
+        
+        if (data) {
+          setEvents(data);
+        }
+      } catch (error) {
+        console.error('Error fetching events:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [supabase]);
+
   // Filter ESS events
   const essEvents = events.filter(e => 
-    e.name.includes('Étoile') || e.name.includes('ESS') || e.description.includes('ESS')
+    e.name.includes('Étoile') || e.name.includes('ESS') || (e.description && e.description.includes('ESS'))
   );
 
   // Group events by category
@@ -22,6 +45,17 @@ export default function EtoilePage() {
       name: category,
       events: essEvents.filter(e => e.category === category)
   })).filter(group => group.events.length > 0);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white text-black flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-red-600" />
+          <p className="text-gray-600">Chargement des événements...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white text-black overflow-hidden relative">
@@ -82,7 +116,6 @@ export default function EtoilePage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             {group.events.map((event, index) => {
-                                const image = imageMap.get(event.image);
                                 return (
                                     <div
                                     key={event.id}
@@ -93,9 +126,9 @@ export default function EtoilePage() {
                                         {/* Custom Event Card Content specifically for ESS page */}
                                         <div className="aspect-[4/3] relative overflow-hidden">
                                             {/* We can use the existing EventCard or build a custom one. Let's use custom to make it very "ESS" themed */}
-                                            {image ? (
+                                            {event.image_url ? (
                                                 <img 
-                                                    src={image.imageUrl} 
+                                                    src={event.image_url} 
                                                     alt={event.name} 
                                                     className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-700"
                                                 />

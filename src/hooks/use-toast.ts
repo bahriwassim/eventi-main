@@ -65,10 +65,15 @@ const addToRemoveQueue = (toastId: string) => {
 
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId)
-    dispatch({
-      type: "REMOVE_TOAST",
-      toastId: toastId,
-    })
+    try {
+      dispatch({
+        type: "REMOVE_TOAST",
+        toastId: toastId,
+      })
+    } catch (error) {
+      // Ignore errors if component is unmounted
+      console.warn('Failed to remove toast:', error)
+    }
   }, TOAST_REMOVE_DELAY)
 
   toastTimeouts.set(toastId, timeout)
@@ -181,6 +186,9 @@ function useToast() {
       if (index > -1) {
         listeners.splice(index, 1)
       }
+      // Clear all timeouts when component unmounts
+      toastTimeouts.forEach((timeout) => clearTimeout(timeout))
+      toastTimeouts.clear()
     }
   }, [state])
 

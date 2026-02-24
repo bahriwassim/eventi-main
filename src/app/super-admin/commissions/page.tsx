@@ -15,7 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { events, users } from "@/lib/placeholder-data";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, Percent, TrendingUp, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -29,6 +28,11 @@ export default function SuperAdminCommissionsPage() {
   const [tier1Rate, setTier1Rate] = useState(4); // > 3000 tickets
   const [tier2Rate, setTier2Rate] = useState(5); // > 1000 tickets
   const [tier3Rate, setTier3Rate] = useState(6); // < 1000 tickets
+  
+  // Use empty arrays for now - will need to fetch real data from Supabase
+  const [events, setEvents] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Calculate commission based on ticket sales volume (mocked here by random number or price)
   // Let's assume ticket count is roughly revenue / price for demo, or just mock it.
@@ -41,7 +45,7 @@ export default function SuperAdminCommissionsPage() {
     else if (ticketCount > 1000) rate = tier2Rate / 100;
     else rate = tier3Rate / 100;
 
-    const admin = users.find(u => u.email.includes('admin'));
+    const admin = users.find(u => u.email && u.email.includes('admin'));
 
     return {
       eventId: event.id,

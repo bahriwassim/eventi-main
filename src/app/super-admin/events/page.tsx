@@ -4,13 +4,12 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { categories, events } from "@/lib/placeholder-data";
 import { PlusCircle, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 export default function SuperAdminEventsPage() {
   const [featuredEvents, setFeaturedEvents] = useState(['1', '9', '7', '10']);
-  const [currentCategories, setCategories] = useState(categories);
+  const [currentCategories, setCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
 
   const toggleFeatured = (eventId: string) => {

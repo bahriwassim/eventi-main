@@ -9,8 +9,8 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '@/components/ui/carousel';
-import { type Event } from '@/lib/placeholder-data';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { type CarouselApi } from '@/components/ui/carousel';
+import { type Event } from '@/lib/types';
 import Autoplay from 'embla-carousel-autoplay';
 
 interface EventsCarouselProps {
@@ -19,8 +19,6 @@ interface EventsCarouselProps {
 }
 
 export function EventsCarousel({ events, title }: EventsCarouselProps) {
-  const imageMap = new Map(PlaceHolderImages.map((img) => [img.id, img]));
-
   // Plugin for autoplay
   const plugin = React.useRef(
     Autoplay({ delay: 4000, stopOnInteraction: true })
@@ -45,11 +43,10 @@ export function EventsCarousel({ events, title }: EventsCarouselProps) {
       >
         <CarouselContent className="-ml-4 pb-4">
           {events.map((event) => {
-            const image = imageMap.get(event.image);
             return (
               <CarouselItem key={event.id} className="pl-4 md:basis-1/2 lg:basis-1/3 xl:basis-1/4">
                 <div className="h-full transform transition-all duration-300 hover:-translate-y-1">
-                  <EventCard event={event} image={image} />
+                  <EventCard event={event} />
                 </div>
               </CarouselItem>
             );

@@ -20,6 +20,17 @@ export default function GatePage() {
   const [status, setStatus] = useState<ScanStatus>('idle');
   const [scannedTicket, setScannedTicket] = useState<any | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(err => console.error("Failed to stop scanner", err));
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!loading) {
@@ -44,6 +55,7 @@ export default function GatePage() {
 
     // Give DOM time to render the 'reader' div
     setTimeout(async () => {
+      if (!isMounted.current) return;
         try {
             if (scannerRef.current) {
                 await scannerRef.current.stop().catch(() => {});
@@ -59,7 +71,7 @@ export default function GatePage() {
                     qrbox: { width: 250, height: 250 }
                 },
                 (decodedText) => {
-                    verifyTicket(decodedText);
+                    if (isMounted.current) verifyTicket(decodedText);
                 },
                 (errorMessage) => {
                     // ignore scan errors, they happen when no QR is in frame
@@ -67,7 +79,7 @@ export default function GatePage() {
             );
         } catch (err) {
             console.error("Error starting scanner", err);
-            setStatus('invalid');
+            if (isMounted.current) setStatus('idle');
         }
     }, 100);
   };
