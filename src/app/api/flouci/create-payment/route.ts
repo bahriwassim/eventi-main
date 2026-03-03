@@ -37,6 +37,7 @@ export async function POST(request: Request) {
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
   }
+  const amountInMillimes = Math.round(amount);
 
   const currency = typeof body?.currency === 'string' ? body.currency : 'TND';
   if (currency !== 'TND') {
@@ -54,8 +55,22 @@ export async function POST(request: Request) {
       : `${origin}/payment/fail`;
   const webhookUrl = `${origin}/api/flouci/webhook`;
 
+  if (body?.orderId && body.orderId.length > 50) {
+    return NextResponse.json(
+      { error: 'developer_tracking_id is too long' },
+      { status: 400 }
+    );
+  }
+
+  if (destinationId && !/^\d+$/.test(destinationId)) {
+    return NextResponse.json(
+      { error: 'Invalid FLOUCI_MERCHANT_ID format' },
+      { status: 400 }
+    );
+  }
+
   const payload: Record<string, unknown> = {
-    amount,
+    amount: amountInMillimes,
     success_link: successUrl,
     fail_link: failUrl,
     webhook: webhookUrl,
@@ -64,7 +79,7 @@ export async function POST(request: Request) {
   if (destinationId) {
     payload.destination = [
       {
-        amount,
+        amount: amountInMillimes,
         destination: destinationId,
       },
     ];
@@ -100,29 +115,73 @@ export async function POST(request: Request) {
     data = { raw: rawText };
   }
 
-  if (!flouciResponse.ok) {
+  const debugPayload = {
+    amount: amountInMillimes,
+    success_link: successUrl,
+    fail_link: failUrl,
+    webhook: webhookUrl,
+    developer_tracking_id: body?.orderId || null,
+    destination: destinationId
+      ? [{ amount: amountInMillimes, destination: destinationId }]
+      : null,
+  };
+
+  const v2Failed =
+    !flouciResponse.ok ||
+    (data &&
+      typeof data === 'object' &&
+      (data as { result?: { success?: boolean } })?.result?.success === false);
+
+  if (v2Failed) {
+    const legacyPayload: Record<string, unknown> = {
+      amount: amountInMillimes,
+      currency,
+      success_url: successUrl,
+      fail_url: failUrl,
+    };
+
+    if (body?.metadata && typeof body.metadata === 'object') {
+      legacyPayload.metadata = body.metadata;
+    }
+
+    if (body?.customer && typeof body.customer === 'object') {
+      legacyPayload.customer = body.customer;
+    }
+
+    const legacyResponse = await fetch(
+      'https://api.flouci.com/payments/init',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-app-id': appId,
+          'x-app-secret': appSecret,
+        },
+        body: JSON.stringify(legacyPayload),
+      }
+    );
+
+    const legacyText = await legacyResponse.text();
+    let legacyData: unknown = null;
+    try {
+      legacyData = legacyText ? JSON.parse(legacyText) : null;
+    } catch {
+      legacyData = { raw: legacyText };
+    }
+
+    if (legacyResponse.ok) {
+      return NextResponse.json(legacyData);
+    }
+
     return NextResponse.json(
       {
         error: 'Flouci initialization failed',
         details: data,
+        payload: debugPayload,
         status: flouciResponse.status,
+        legacyDetails: legacyData,
       },
-      { status: flouciResponse.status }
-    );
-  }
-
-  if (
-    data &&
-    typeof data === 'object' &&
-    (data as { result?: { success?: boolean } })?.result?.success === false
-  ) {
-    return NextResponse.json(
-      {
-        error: 'Flouci initialization failed',
-        details: (data as { result?: unknown }).result,
-        status: 400,
-      },
-      { status: 400 }
+      { status: flouciResponse.status || 400 }
     );
   }
 
