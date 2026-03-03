@@ -16,8 +16,8 @@ type CreatePaymentBody = {
 export async function POST(request: Request) {
   const appId = process.env.FLOUCI_PUBLIC_KEY;
   const appSecret = process.env.FLOUCI_SECRET_KEY;
-  const destinationId = process.env.FLOUCI_MERCHANT_ID;
   const baseUrlOverride = process.env.FLOUCI_BASE_URL;
+  const allowMetadata = process.env.FLOUCI_ALLOW_METADATA === 'true';
 
   if (!appId || !appSecret) {
     return NextResponse.json(
@@ -62,34 +62,19 @@ export async function POST(request: Request) {
     );
   }
 
-  if (destinationId && !/^\d+$/.test(destinationId)) {
-    return NextResponse.json(
-      { error: 'Invalid FLOUCI_MERCHANT_ID format' },
-      { status: 400 }
-    );
-  }
-
   const payload: Record<string, unknown> = {
     amount: amountInMillimes,
     success_link: successUrl,
     fail_link: failUrl,
     webhook: webhookUrl,
+    session_timeout_secs: 1200,
   };
-
-  if (destinationId) {
-    payload.destination = [
-      {
-        amount: amountInMillimes,
-        destination: destinationId,
-      },
-    ];
-  }
 
   if (body?.orderId) {
     payload.developer_tracking_id = body.orderId;
   }
 
-  if (body?.metadata && typeof body.metadata === 'object') {
+  if (allowMetadata && body?.metadata && typeof body.metadata === 'object') {
     payload.metadata = body.metadata;
   }
 
@@ -121,9 +106,8 @@ export async function POST(request: Request) {
     fail_link: failUrl,
     webhook: webhookUrl,
     developer_tracking_id: body?.orderId || null,
-    destination: destinationId
-      ? [{ amount: amountInMillimes, destination: destinationId }]
-      : null,
+    session_timeout_secs: 1200,
+    metadata: allowMetadata ? body?.metadata || null : null,
   };
 
   const v2Failed =
