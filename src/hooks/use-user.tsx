@@ -10,13 +10,24 @@ export function useUser() {
   const supabase = createClient();
 
   useEffect(() => {
+    let isMounted = true;
+    // Fallback timeout to avoid infinite loading on refresh in edge cases
+    const timeoutId = setTimeout(() => {
+      if (isMounted) setLoading(false);
+    }, 3500);
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
       if (session?.user) {
-        fetchUserRole(session.user).then(userWithRole => {
-          setUser(userWithRole);
-          setLoading(false);
-        });
+        fetchUserRole(session.user)
+          .then(userWithRole => {
+            if (!isMounted) return;
+            setUser(userWithRole);
+          })
+          .finally(() => {
+            if (isMounted) setLoading(false);
+          });
       } else {
         setUser(null);
         setLoading(false);
@@ -27,6 +38,7 @@ export function useUser() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return;
       if (session?.user) {
         // We need to fetch role again on auth state change
         const userWithRole = await fetchUserRole(session.user);
@@ -37,7 +49,11 @@ export function useUser() {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { user, loading };

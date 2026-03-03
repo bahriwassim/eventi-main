@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { notFound, useRouter } from 'next/navigation';
+import { notFound, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +22,6 @@ type CheckoutPageProps = {
 };
 
 export default function CheckoutPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   // Ensure supabase client is stable across renders to prevent unnecessary re-runs
   const [supabase] = useState(() => createClient());
@@ -188,25 +187,25 @@ export default function CheckoutPage({ searchParams }: { searchParams?: { [key: 
     const phoneRegex = /^\+?[0-9\s-]{8,}$/;
 
     if (!user) {
-        if (!email || !emailRegex.test(email)) {
-            toast({ variant: "destructive", title: "Email invalide", description: "Veuillez entrer une adresse email valide." });
-            return;
-        }
-        if (!password || password.length < 6) {
-            toast({ variant: "destructive", title: "Mot de passe court", description: "Le mot de passe doit contenir au moins 6 caractères." });
-            return;
-        }
+      if (!email || !emailRegex.test(email)) {
+        toast({ variant: "destructive", title: "Email invalide", description: "Veuillez entrer une adresse email valide." });
+        return;
+      }
+      if (!password || password.length < 6) {
+        toast({ variant: "destructive", title: "Mot de passe court", description: "Le mot de passe doit contenir au moins 6 caractères." });
+        return;
+      }
     }
 
     if (phone && !phoneRegex.test(phone)) {
-        toast({ variant: "destructive", title: "Téléphone invalide", description: "Veuillez entrer un numéro de téléphone valide." });
-        return;
+      toast({ variant: "destructive", title: "Téléphone invalide", description: "Veuillez entrer un numéro de téléphone valide." });
+      return;
     }
 
-    // Validate attendee names
-    if (attendeeNames.some(name => !name.trim())) {
-        toast({ variant: "destructive", title: "Noms manquants", description: "Veuillez renseigner le nom de chaque participant." });
-        return;
+    // Validate attendee names ONLY when l'utilisateur est connecté (champs visibles)
+    if (user && attendeeNames.some(name => !name.trim())) {
+      toast({ variant: "destructive", title: "Noms manquants", description: "Veuillez renseigner le nom de chaque participant." });
+      return;
     }
 
     setIsProcessing(true);
@@ -223,94 +222,91 @@ export default function CheckoutPage({ searchParams }: { searchParams?: { [key: 
         }
 
         if (isLoginMode) {
-        // Login
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        userId = data.user.id;
-      } else {
-        // Signup
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: attendeeNames[0] || email.split('@')[0],
-              phone_number: phone,
-            }
-          }
-        });
-        if (error) throw error;
-        userId = data.user?.id;
-        
-        if (!userId) {
-          toast({ title: "Inscription réussie", description: "Veuillez vérifier votre email pour confirmer votre compte." });
-          // If email confirmation is required, we can't proceed with ticket creation immediately unless we use a service role or wait.
-          // For now, let's assume we stop here or handle it.
+          // Login
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) throw error;
+          userId = data.user.id;
+          toast({ title: "Connexion réussie", description: "Vous êtes connecté. Renseignez les noms des participants puis relancez le paiement." });
           setIsProcessing(false);
-          return; 
+          return; // laisser l'interface se rafraîchir pour afficher les champs participants
+        } else {
+          // Signup
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: attendeeNames[0] || email.split('@')[0],
+                phone_number: phone,
+              }
+            }
+          });
+          if (error) throw error;
+          userId = data.user?.id;
+          
+          if (!userId) {
+            toast({ title: "Inscription réussie", description: "Veuillez vérifier votre email pour confirmer votre compte." });
+            setIsProcessing(false);
+            return;
+          }
+          toast({ title: "Compte créé", description: "Vous êtes connecté. Renseignez les noms des participants puis relancez le paiement." });
+          setIsProcessing(false);
+          return; // idem: afficher la zone participants après création de compte
         }
       }
+
+      if (attendeeNames.some(name => !name.trim())) {
+        toast({ variant: "destructive", title: "Noms manquants", description: "Veuillez renseigner le nom de chaque participant." });
+        setIsProcessing(false);
+        return;
       }
 
-      // Create tickets in DB
-      // Use the actual ID (DB or Placeholder)
-      const isPlaceholderEvent = !event.id || event.id.startsWith('placeholder-') || ['1', '2', '3', '4', '5', '7', '9', '10', '11', '12', '13', '14'].includes(event.id);
-      
-      if (isPlaceholderEvent) {
-        // Simulate success for placeholder events
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Save to localStorage for persistence in this demo session
-        const localTickets = JSON.parse(localStorage.getItem('eventi_local_tickets') || '[]');
-        const newLocalTickets = Array.from({ length: quantity }).map((_, i) => ({
-            id: `LOCAL-${Date.now()}-${i}`,
+      const shortEventId = String(event.id).replace(/-/g, '').slice(0, 8);
+      const shortUserId = String(userId).replace(/-/g, '').slice(0, 8);
+      const orderId = `e${shortEventId}-u${shortUserId}-q${quantity}`;
+      const response = await fetch('/api/flouci/create-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: Math.round(total * 1000),
+          currency: 'TND',
+          orderId,
+          metadata: {
             event_id: event.id,
-            user_id: userId,
-            price_paid: ticketPrice,
-            status: 'valid',
-            purchase_date: new Date().toISOString(),
-            qr_code_value: `EVENTI-${event.id}-LOCAL-${userId}-${Date.now()}-${i}`
-        }));
-        localStorage.setItem('eventi_local_tickets', JSON.stringify([...localTickets, ...newLocalTickets]));
+            ticket_type_id: ticketTypeId || '',
+            quantity,
+            user_id: userId || '',
+            ticket_type: selectedType,
+          },
+        }),
+      });
 
-        // PERSISTENCE HACK: Also save to user metadata so it works across devices/incognito
-        if (user && user.user_metadata) {
-            const currentMetaTickets = user.user_metadata.tickets || [];
-            await supabase.auth.updateUser({
-                data: {
-                    tickets: [...currentMetaTickets, ...newLocalTickets]
-                }
-            });
-        }
-        
-      } else {
-        const ticketsToInsert = Array.from({ length: quantity }).map((_, i) => ({
-          event_id: event.id,
-          user_id: userId,
-          price_paid: ticketPrice,
-          status: 'valid',
-          ticket_type_id: ticketTypeId
-        }));
-  
-        const { error } = await supabase.from('tickets').insert(ticketsToInsert);
-        if (error) throw error;
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const details =
+          typeof data?.details === 'string'
+            ? data.details
+            : data?.details
+              ? JSON.stringify(data.details)
+              : '';
+        const message = data?.error || 'Impossible de créer le paiement';
+        throw new Error(details ? `${message} (${details})` : message);
       }
 
-      toast({ title: "Paiement réussi", description: "Vos billets ont été générés." });
-      
-      // Force refresh of the session/page state before navigating
-      router.refresh();
-      
-      // Try to redirect to confirmation page, fallback to tickets page if it doesn't exist
-      try {
-        router.push(`/confirmation/${event.id}?type=${selectedType}&price=${ticketPrice}&quantity=${quantity}`);
-      } catch (error) {
-        console.warn('Confirmation page not found, redirecting to profile page');
-        router.push('/profile');
+      const paymentUrl =
+        data?.result?.link ||
+        data?.result?.payment_url ||
+        data?.payment_url ||
+        data?.paymentUrl;
+
+      if (!paymentUrl) {
+        throw new Error('URL de paiement introuvable');
       }
+
+      window.location.href = paymentUrl;
     } catch (error: any) {
       console.error('Payment error:', error);
       toast({ variant: "destructive", title: "Erreur", description: error.message || "Une erreur est survenue." });

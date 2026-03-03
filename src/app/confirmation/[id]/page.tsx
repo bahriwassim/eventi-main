@@ -1,6 +1,6 @@
 'use client';
 
-import { notFound, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, useRouter, useSearchParams, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CheckCircle, Download, Mail, Loader2, PartyPopper } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -37,6 +37,8 @@ export default function ConfirmationPage() {
     }
     
     const fetchTicket = async () => {
+        const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+        let foundTicket = false;
         if (!user) return;
         
         // Fetch from Supabase
@@ -50,6 +52,7 @@ export default function ConfirmationPage() {
             .maybeSingle();
             
         if (data) {
+            foundTicket = true;
             // Fetch event details for the ticket
             const { data: eventData } = await supabase
                 .from('events')
@@ -69,7 +72,7 @@ export default function ConfirmationPage() {
                 purchaseDate: data.purchase_date,
                 qrCodeValue: data.qr_code_value || `EVENTI-${data.event_id}-${data.id}-${user.id}`
             });
-        } else {
+        } else if (demoMode) {
            // Check localStorage for simulated tickets
            const localTickets = JSON.parse(localStorage.getItem('eventi_local_tickets') || '[]');
            // Check user metadata for simulated tickets
@@ -83,6 +86,7 @@ export default function ConfirmationPage() {
                 .sort((a: any, b: any) => new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime())[0];
            
            if (localTicket) {
+                foundTicket = true;
                 // Fetch event details for the local ticket
                 const { data: eventData } = await supabase
                     .from('events')
@@ -102,12 +106,12 @@ export default function ConfirmationPage() {
                     qrCodeValue: localTicket.qr_code_value
                 });
            }
-        }
+        } 
         
         setLoadingTicket(false);
         
         // If no ticket found, show error message
-        if (!data && !localTicket) {
+        if (!foundTicket) {
             console.error('No ticket found for this event and user');
             // You could redirect to an error page or show a message
         }
@@ -216,10 +220,26 @@ export default function ConfirmationPage() {
     doc.save(`billet-${event.name.replace(/\s/g, '_')}-${ticket.ticketId}.pdf`);
   };
 
-  if (loading || !user || loadingTicket) {
+  if (loading || loadingTicket) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-4rem)]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-12 max-w-2xl text-center">
+        <div className="rounded-2xl glass border-white/5 p-8">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Session requise</h1>
+          <p className="text-muted-foreground mb-6">
+            Veuillez vous connecter pour afficher la confirmation de votre achat.
+          </p>
+          <Button onClick={() => router.push('/login')} className="bg-gradient-primary hover:opacity-90">
+            Se connecter
+          </Button>
+        </div>
       </div>
     );
   }

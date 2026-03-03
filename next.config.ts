@@ -1,5 +1,7 @@
 import type {NextConfig} from 'next';
 
+const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname : undefined;
+
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
@@ -13,7 +15,7 @@ const nextConfig: NextConfig = {
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: blob: https://images.unsplash.com https://placehold.co https://picsum.photos https://api.dicebear.com",
+      "img-src 'self' data: blob: https://images.unsplash.com https://placehold.co https://picsum.photos https://api.dicebear.com https://*.supabase.co",
       "font-src 'self' https://fonts.gstatic.com data:",
       "connect-src 'self' https://*.supabase.co",
       "frame-ancestors 'none'",
@@ -61,6 +63,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      ...(supabaseHost ? [{
+        protocol: 'https',
+        hostname: supabaseHost,
+        port: '',
+        pathname: '/**',
+      } as const] : []),
     ],
   },
 };
