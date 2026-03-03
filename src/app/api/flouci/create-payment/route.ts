@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const payload: Record<string, unknown> = {
+  const basePayload: Record<string, unknown> = {
     amount: amountInMillimes,
     success_link: successUrl,
     fail_link: failUrl,
@@ -71,35 +71,68 @@ export async function POST(request: Request) {
   };
 
   if (body?.orderId) {
-    payload.developer_tracking_id = body.orderId;
+    basePayload.developer_tracking_id = body.orderId;
   }
 
-  if (allowMetadata && body?.metadata && typeof body.metadata === 'object') {
-    payload.metadata = body.metadata;
-  }
+  const payloadWithMetadata: Record<string, unknown> = {
+    ...basePayload,
+    ...(allowMetadata && body?.metadata && typeof body.metadata === 'object'
+      ? { metadata: body.metadata }
+      : {}),
+  };
 
 
-  const flouciResponse = await fetch(
-    'https://developers.flouci.com/api/v2/generate_payment',
-    {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${appId}:${appSecret}`,
-    },
-    body: JSON.stringify(payload),
+  const callV2 = async (payload: Record<string, unknown>) => {
+    const response = await fetch(
+      'https://developers.flouci.com/api/v2/generate_payment',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${appId}:${appSecret}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    const rawText = await response.text();
+    let parsed: unknown = null;
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      parsed = { raw: rawText };
     }
-  );
 
-  const rawText = await flouciResponse.text();
-  let data: unknown = null;
+    const failed =
+      !response.ok ||
+      (parsed &&
+        typeof parsed === 'object' &&
+        (parsed as { result?: { success?: boolean } })?.result?.success ===
+          false);
 
-  try {
-    data = rawText ? JSON.parse(rawText) : null;
-  } catch {
-    data = { raw: rawText };
+    return { response, parsed, failed };
+  };
+
+  let attemptPayload = payloadWithMetadata;
+  let flouciResult = await callV2(attemptPayload);
+  let v2Attempts: Array<Record<string, unknown>> = [
+    { payload: attemptPayload, result: flouciResult.parsed },
+  ];
+
+  if (flouciResult.failed && allowMetadata && payloadWithMetadata.metadata) {
+    attemptPayload = { ...basePayload };
+    flouciResult = await callV2(attemptPayload);
+    v2Attempts.push({ payload: attemptPayload, result: flouciResult.parsed });
   }
 
+  if (flouciResult.failed && attemptPayload.webhook) {
+    const { webhook, ...payloadWithoutWebhook } = attemptPayload;
+    flouciResult = await callV2(payloadWithoutWebhook);
+    v2Attempts.push({
+      payload: payloadWithoutWebhook,
+      result: flouciResult.parsed,
+    });
+  }
   const debugPayload = {
     amount: amountInMillimes,
     success_link: successUrl,
@@ -110,13 +143,7 @@ export async function POST(request: Request) {
     metadata: allowMetadata ? body?.metadata || null : null,
   };
 
-  const v2Failed =
-    !flouciResponse.ok ||
-    (data &&
-      typeof data === 'object' &&
-      (data as { result?: { success?: boolean } })?.result?.success === false);
-
-  if (v2Failed) {
+  if (flouciResult.failed) {
     const legacyPayload: Record<string, unknown> = {
       amount: amountInMillimes,
       currency,
@@ -161,16 +188,17 @@ export async function POST(request: Request) {
       {
         error: 'Flouci initialization failed',
         details: {
-          v2: data,
+          v2Attempts,
           legacy: legacyData,
         },
+        detailsText: JSON.stringify({ v2Attempts, legacy: legacyData }),
         payload: debugPayload,
-        status: flouciResponse.status,
+        status: flouciResult.response.status,
         legacyDetails: legacyData,
       },
-      { status: flouciResponse.status || 400 }
+      { status: flouciResult.response.status || 400 }
     );
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json(flouciResult.parsed);
 }
