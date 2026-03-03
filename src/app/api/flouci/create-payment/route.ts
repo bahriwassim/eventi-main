@@ -176,7 +176,10 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: 'Flouci initialization failed',
-        details: data,
+        details: {
+          v2: data,
+          legacy: legacyData,
+        },
         payload: debugPayload,
         status: flouciResponse.status,
         legacyDetails: legacyData,
