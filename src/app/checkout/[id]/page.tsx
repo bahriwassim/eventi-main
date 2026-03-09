@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Ticket, CreditCard, Calendar, MapPin, Plus, Minus, ShieldCheck, ArrowLeft, Loader2 } from 'lucide-react';
+import { Ticket, Calendar, MapPin, Plus, Minus, ShieldCheck, ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -506,22 +506,8 @@ export default function CheckoutPage({ searchParams }: { searchParams?: { [key: 
                   .
                 </Label>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="card" className="text-sm text-muted-foreground">Détails de la carte</Label>
-                <div className="relative">
-                  <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="card" placeholder="Numéro de carte" className="pl-10 bg-white/5 border-white/10 focus:border-primary/50 transition-all" />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="expiry" className="text-sm text-muted-foreground">Expiration</Label>
-                  <Input id="expiry" placeholder="MM/AA" className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cvc" className="text-sm text-muted-foreground">CVC</Label>
-                  <Input id="cvc" placeholder="CVC" className="bg-white/5 border-white/10 focus:border-primary/50 transition-all" />
-                </div>
+              <div className="text-sm text-muted-foreground">
+                Payer (paiement sécurisé)
               </div>
               <Button 
                 className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 shadow-glow-sm mt-2" 
