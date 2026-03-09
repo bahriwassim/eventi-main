@@ -74,15 +74,65 @@ export async function POST(request: Request) {
     (payload.result as { developer_tracking_id?: string })?.developer_tracking_id ||
     (payload.payment as { order_id?: string })?.order_id;
 
+  const paymentId =
+    (payload.payment_id as string) ||
+    (payload.result as { payment_id?: string })?.payment_id ||
+    (payload.payment as { payment_id?: string; id?: string })?.payment_id ||
+    (payload.payment as { payment_id?: string; id?: string })?.id;
+
   const metadata =
     (payload.metadata as Record<string, unknown>) ||
     (payload.result as { metadata?: Record<string, unknown> })?.metadata ||
     (payload.payment as { metadata?: Record<string, unknown> })?.metadata ||
     {};
 
-  const status = normalizeStatus(statusRaw || 'processing');
-  const amountValue = Number(amountRaw) || 0;
-  const amountTnd = currency === 'TND' ? amountValue / 1000 : amountValue;
+  let status = normalizeStatus(statusRaw || 'processing');
+  let amountValue = Number(amountRaw) || 0;
+  let amountTnd = currency === 'TND' ? amountValue / 1000 : amountValue;
+  let developerTrackingId = orderId;
+
+  if (paymentId) {
+    const appId = process.env.FLOUCI_PUBLIC_KEY;
+    const appSecret = process.env.FLOUCI_SECRET_KEY;
+    if (appId && appSecret) {
+      const verifyResponse = await fetch(
+        `https://developers.flouci.com/api/v2/verify_payment/${paymentId}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${appId}:${appSecret}`,
+          },
+        }
+      );
+
+      const verifyText = await verifyResponse.text();
+      let verifyData: unknown = null;
+      try {
+        verifyData = verifyText ? JSON.parse(verifyText) : null;
+      } catch {
+        verifyData = null;
+      }
+
+      if (
+        verifyData &&
+        typeof verifyData === 'object' &&
+        (verifyData as { success?: boolean }).success === true
+      ) {
+        const result = (verifyData as { result?: Record<string, unknown> })
+          .result;
+        const verifyStatus = (result?.status as string | undefined) || '';
+        const verifyAmount = Number(result?.amount) || amountValue;
+        const verifyTrackingId = result?.developer_tracking_id as
+          | string
+          | undefined;
+
+        status = normalizeStatus(verifyStatus || statusRaw || 'processing');
+        amountValue = verifyAmount;
+        amountTnd = currency === 'TND' ? amountValue / 1000 : amountValue;
+        developerTrackingId = verifyTrackingId || developerTrackingId;
+      }
+    }
+  }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -92,7 +142,9 @@ export async function POST(request: Request) {
       auth: { persistSession: false },
     });
 
-    const description = orderId ? `Flouci order ${orderId}` : 'Flouci payment';
+    const description = developerTrackingId
+      ? `Flouci order ${developerTrackingId}`
+      : 'Flouci payment';
     const { data: existingTransaction } = await supabase
       .from('transactions')
       .select('id')

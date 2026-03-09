@@ -6,6 +6,11 @@ type CreatePaymentBody = {
   orderId?: string;
   successUrl?: string;
   failUrl?: string;
+  sessionTimeoutSecs?: number;
+  acceptCard?: boolean;
+  imageUrl?: string;
+  preAuthorization?: boolean;
+  destination?: Array<{ amount: number; destination: string }>;
   customer?: {
     email?: string;
     phone?: string;
@@ -62,143 +67,86 @@ export async function POST(request: Request) {
     );
   }
 
-  const basePayload: Record<string, unknown> = {
+  const payload: Record<string, unknown> = {
     amount: amountInMillimes,
     success_link: successUrl,
     fail_link: failUrl,
     webhook: webhookUrl,
-    session_timeout_secs: 1200,
   };
 
   if (body?.orderId) {
-    basePayload.developer_tracking_id = body.orderId;
+    payload.developer_tracking_id = body.orderId;
   }
 
-  const payloadWithMetadata: Record<string, unknown> = {
-    ...basePayload,
-    ...(allowMetadata && body?.metadata && typeof body.metadata === 'object'
-      ? { metadata: body.metadata }
-      : {}),
-  };
-
-
-  const callV2 = async (payload: Record<string, unknown>) => {
-    const response = await fetch(
-      'https://developers.flouci.com/api/v2/generate_payment',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${appId}:${appSecret}`,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
-
-    const rawText = await response.text();
-    let parsed: unknown = null;
-    try {
-      parsed = rawText ? JSON.parse(rawText) : null;
-    } catch {
-      parsed = { raw: rawText };
-    }
-
-    const failed =
-      !response.ok ||
-      (parsed &&
-        typeof parsed === 'object' &&
-        (parsed as { result?: { success?: boolean } })?.result?.success ===
-          false);
-
-    return { response, parsed, failed };
-  };
-
-  let attemptPayload = payloadWithMetadata;
-  let flouciResult = await callV2(attemptPayload);
-  let v2Attempts: Array<Record<string, unknown>> = [
-    { payload: attemptPayload, result: flouciResult.parsed },
-  ];
-
-  if (flouciResult.failed && allowMetadata && payloadWithMetadata.metadata) {
-    attemptPayload = { ...basePayload };
-    flouciResult = await callV2(attemptPayload);
-    v2Attempts.push({ payload: attemptPayload, result: flouciResult.parsed });
+  if (Number.isFinite(body?.sessionTimeoutSecs)) {
+    payload.session_timeout_secs = Number(body?.sessionTimeoutSecs);
   }
 
-  if (flouciResult.failed && attemptPayload.webhook) {
-    const { webhook, ...payloadWithoutWebhook } = attemptPayload;
-    flouciResult = await callV2(payloadWithoutWebhook);
-    v2Attempts.push({
-      payload: payloadWithoutWebhook,
-      result: flouciResult.parsed,
-    });
+  if (typeof body?.acceptCard === 'boolean') {
+    payload.accept_card = body.acceptCard;
   }
-  const debugPayload = {
-    amount: amountInMillimes,
-    success_link: successUrl,
-    fail_link: failUrl,
-    webhook: webhookUrl,
-    developer_tracking_id: body?.orderId || null,
-    session_timeout_secs: 1200,
-    metadata: allowMetadata ? body?.metadata || null : null,
-  };
 
-  if (flouciResult.failed) {
-    const legacyPayload: Record<string, unknown> = {
-      amount: amountInMillimes,
-      currency,
-      success_url: successUrl,
-      fail_url: failUrl,
-    };
+  if (typeof body?.imageUrl === 'string' && body.imageUrl.length > 0) {
+    payload.image_url = body.imageUrl;
+  }
 
-    if (body?.metadata && typeof body.metadata === 'object') {
-      legacyPayload.metadata = body.metadata;
+  if (typeof body?.preAuthorization === 'boolean') {
+    payload.pre_authorization = body.preAuthorization;
+  }
+
+  if (Array.isArray(body?.destination) && body.destination.length > 0) {
+    payload.destination = body.destination;
+  }
+
+  if (allowMetadata && body?.metadata && typeof body.metadata === 'object') {
+    payload.metadata = body.metadata;
+  }
+
+  const flouciResponse = await fetch(
+    'https://developers.flouci.com/api/v2/generate_payment',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${appId}:${appSecret}`,
+      },
+      body: JSON.stringify(payload),
     }
+  );
 
-    if (body?.customer && typeof body.customer === 'object') {
-      legacyPayload.customer = body.customer;
-    }
+  const rawText = await flouciResponse.text();
+  let data: unknown = null;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    data = { raw: rawText };
+  }
 
-    const legacyResponse = await fetch(
-      'https://api.flouci.com/payments/init',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-app-id': appId,
-          'x-app-secret': appSecret,
-        },
-        body: JSON.stringify(legacyPayload),
-      }
-    );
-
-    const legacyText = await legacyResponse.text();
-    let legacyData: unknown = null;
-    try {
-      legacyData = legacyText ? JSON.parse(legacyText) : null;
-    } catch {
-      legacyData = { raw: legacyText };
-    }
-
-    if (legacyResponse.ok) {
-      return NextResponse.json(legacyData);
-    }
-
+  if (!flouciResponse.ok) {
     return NextResponse.json(
       {
         error: 'Flouci initialization failed',
-        details: {
-          v2Attempts,
-          legacy: legacyData,
-        },
-        detailsText: JSON.stringify({ v2Attempts, legacy: legacyData }),
-        payload: debugPayload,
-        status: flouciResult.response.status,
-        legacyDetails: legacyData,
+        details: data,
+        status: flouciResponse.status,
       },
-      { status: flouciResult.response.status || 400 }
+      { status: flouciResponse.status }
     );
   }
 
-  return NextResponse.json(flouciResult.parsed);
+  if (
+    data &&
+    typeof data === 'object' &&
+    (data as { result?: { success?: boolean } })?.result?.success === false
+  ) {
+    return NextResponse.json(
+      {
+        error: 'Flouci initialization failed',
+        details: (data as { result?: unknown }).result,
+        status: 400,
+      },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json(data);
 }
