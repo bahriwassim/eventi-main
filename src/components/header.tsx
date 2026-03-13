@@ -35,8 +35,8 @@ export function Header() {
   const { toast } = useToast();
 
   // Add Dashboard link conditionally based on role
-  const dashboardLink = user && (user.role === 'admin' || user.role === 'super_admin' || user.role === 'gate_personnel') 
-    ? { href: user.role === 'super_admin' ? '/super-admin' : user.role === 'admin' ? '/admin' : '/gate', label: user.role === 'gate_personnel' ? 'Porte' : 'Dashboard' }
+  const dashboardLink = user && (user.role === 'admin' || user.role === 'super_admin' || user.role === 'gate') 
+    ? { href: user.role === 'super_admin' ? '/super-admin' : user.role === 'admin' ? '/admin' : '/gate', label: user.role === 'gate' ? 'Porte' : 'Dashboard' }
     : null;
 
   const currentNavLinks = dashboardLink ? [dashboardLink, ...navLinks] : navLinks;

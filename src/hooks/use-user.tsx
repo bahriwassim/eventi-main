@@ -64,25 +64,15 @@ async function fetchUserRole(user: User) {
   const supabase = createClient();
   
   try {
-    // Check Super Admin
-    const { data: superAdmin } = await supabase
-      .from('super_admins')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (superAdmin) {
+    // Check Super Admin via RPC to avoid RLS issues
+    const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
+    if (isSuperAdmin) {
       return { ...formattedUser, role: 'super_admin' };
     }
 
-    // Check Admin
-    const { data: admin } = await supabase
-      .from('admins')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (admin) {
+    // Check Admin via RPC to avoid RLS issues
+    const { data: isAdmin } = await supabase.rpc('is_admin');
+    if (isAdmin) {
       return { ...formattedUser, role: 'admin' };
     }
 

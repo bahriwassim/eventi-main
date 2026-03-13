@@ -71,29 +71,38 @@ export default function AdminAccountingPage() {
     try {
       setLoading(true);
       
-      // Fetch all transactions
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not found');
+
       const { data: transactionsData, error: transactionsError } = await supabase
         .from('transactions')
         .select('*')
+        .eq('admin_id', user.id)
         .order('created_at', { ascending: false });
 
       if (transactionsError) throw transactionsError;
-
-      // Fetch admin data for balance calculations
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not found');
 
       const { data: adminData, error: adminError } = await supabase
         .from('admins')
         .select('total_earned, total_paid')
         .eq('id', user.id)
-        .single();
-
-      if (adminError) throw adminError;
+        .maybeSingle();
 
       setTransactions(transactionsData || []);
-      setTotalPaid(adminData?.total_paid || 0);
-      setCurrentBalance((adminData?.total_earned || 0) - (adminData?.total_paid || 0));
+
+      if (!adminError && adminData) {
+        setTotalPaid(adminData.total_paid || 0);
+        setCurrentBalance((adminData.total_earned || 0) - (adminData.total_paid || 0));
+      } else {
+        const totalSales = (transactionsData || [])
+          .filter(t => t.type === 'sale' && t.status === 'completed')
+          .reduce((acc, t) => acc + (t.amount || 0), 0);
+        const totalPayouts = (transactionsData || [])
+          .filter(t => t.type === 'payout' && t.status === 'completed')
+          .reduce((acc, t) => acc + (t.amount || 0), 0);
+        setTotalPaid(totalPayouts);
+        setCurrentBalance(totalSales - totalPayouts);
+      }
       
       // Calculate pending payouts
       const pending = transactionsData?.filter(t => t.type === 'payout' && t.status === 'processing') || [];
@@ -124,13 +133,17 @@ export default function AdminAccountingPage() {
 
       try {
         // Create payout transaction
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not found');
+
         const { error: payoutError } = await supabase
           .from('transactions')
           .insert([{
             type: 'payout',
             amount: amount,
             status: 'processing',
-            description: `Demande de retrait - ${new Date().toLocaleDateString('fr-FR')}`
+            description: `Demande de retrait - ${new Date().toLocaleDateString('fr-FR')}`,
+            admin_id: user.id
           }]);
 
         if (payoutError) throw payoutError;

@@ -37,7 +37,7 @@ export default function AdminSalesPage() {
         .select(`
           *,
           event:events(*),
-          user:users(*)
+          user:profiles(*)
         `)
         .order('purchase_date', { ascending: false });
 
@@ -46,10 +46,10 @@ export default function AdminSalesPage() {
       const formattedSales = data.map(ticket => ({
         id: ticket.id,
         eventName: ticket.event?.name || 'Événement inconnu',
-        userName: ticket.user?.full_name || 'Utilisateur inconnu',
+        userName: ticket.user?.display_name || 'Utilisateur inconnu',
         userEmail: ticket.user?.email || 'N/A',
         purchaseDate: new Date(ticket.purchase_date).toLocaleDateString(),
-        eventPrice: ticket.price,
+        eventPrice: Number(ticket.price_paid ?? ticket.price ?? 0),
         eventCategory: ticket.event?.category || 'Non classé',
         status: ticket.status,
       }));
@@ -185,7 +185,7 @@ export default function AdminSalesPage() {
                     </TableHeader>
                     <TableBody>
                     {allSales.slice(0, 10).map((sale) => (
-                        <TableRow key={sale.ticketId} className="border-white/5 hover:bg-white/5 transition-colors">
+                        <TableRow key={sale.id} className="border-white/5 hover:bg-white/5 transition-colors">
                         <TableCell>
                             <div className="flex flex-col">
                                 <span className="font-medium text-foreground">{sale.eventName}</span>

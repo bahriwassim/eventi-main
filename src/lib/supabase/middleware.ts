@@ -74,26 +74,13 @@ export async function updateSession(request: NextRequest) {
     const isGatePath = pathname.startsWith('/gate')
 
     if (isAdminPath || isSuperAdminPath || isGatePath) {
-      const { data: superAdmin } = await supabase
-        .from('super_admins')
-        .select('id')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      const { data: admin } = await supabase
-        .from('admins')
-        .select('id')
-        .eq('id', user.id)
-        .maybeSingle()
-
+      const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+      const { data: isAdmin } = await supabase.rpc('is_admin')
       const { data: gate } = await supabase
         .from('gate_personnel')
         .select('id')
         .eq('id', user.id)
         .maybeSingle()
-
-      const isSuperAdmin = !!superAdmin
-      const isAdmin = !!admin
       const isGate = !!gate
 
       if (isSuperAdminPath && !isSuperAdmin) {
