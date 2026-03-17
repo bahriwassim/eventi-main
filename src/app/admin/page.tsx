@@ -36,6 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
+import { uploadFileSecure } from '@/lib/upload-secure';
 
 // Mock clients data generator
 const generateMockClients = (eventId: string, count: number) => {
@@ -269,36 +270,15 @@ export default function AdminDashboardPage() {
       setUploading(true);
       let imageUrl = newEvent.image_url;
 
-      // Upload Image if selected
+      // Upload Image if selected using secure upload
       if (posterFile && isMounted.current) {
         try {
-          const fileExt = posterFile.name.split('.').pop();
-          const fileName = `event-posters/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+          const uploadResult = await uploadFileSecure(posterFile);
           
-          // Create a timeout for the upload
-          const uploadPromise = supabase.storage
-            .from('images')
-            .upload(fileName, posterFile, {
-               cacheControl: '3600',
-               upsert: false
-            });
-          
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Upload timeout')), 30000)
-          );
-          
-          const result = await Promise.race([uploadPromise, timeoutPromise]);
-          
-          if (result && 'error' in result && result.error) {
-            throw result.error;
-          }
-          
-          const { data: { publicUrl } } = supabase.storage
-            .from('images')
-            .getPublicUrl(fileName);
-          
-          if (isMounted.current) {
-            imageUrl = publicUrl;
+          if (uploadResult.success && uploadResult.url) {
+            imageUrl = uploadResult.url;
+          } else {
+            throw new Error(uploadResult.error || "Erreur lors du téléchargement de l'image");
           }
         } catch (uploadError) {
           console.error('Upload error:', uploadError);

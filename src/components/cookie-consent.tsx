@@ -4,22 +4,22 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Cookie } from 'lucide-react';
 import Link from 'next/link';
+import { useSecureStorage } from '@/hooks/use-secure-storage';
 
 export function CookieConsent() {
   const [showBanner, setShowBanner] = useState(false);
+  const { value: consent, setValue: setConsent } = useSecureStorage('cookie-consent');
 
   useEffect(() => {
-    // Check if user has already consented
-    const consent = localStorage.getItem('cookie-consent');
+    // Show banner after a short delay if no consent
     if (!consent) {
-      // Show banner after a short delay
       const timer = setTimeout(() => setShowBanner(true), 1000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [consent]);
 
   const acceptCookies = () => {
-    localStorage.setItem('cookie-consent', 'accepted');
+    setConsent('accepted');
     setShowBanner(false);
   };
 

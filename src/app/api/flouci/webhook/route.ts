@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'crypto';
+import { timingSafeEqual, createHmac } from 'crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -21,19 +21,44 @@ const normalizeStatus = (value: string) => {
   return 'processing';
 };
 
+const verifyHMACSignature = async (payload: string, signature: string, secret: string): Promise<boolean> => {
+  if (!signature || !secret) return false;
+  
+  try {
+    const hmac = createHmac('sha256', secret);
+    hmac.update(payload);
+    const expectedSignature = hmac.digest('hex');
+    
+    const expectedBuffer = Buffer.from(expectedSignature);
+    const receivedBuffer = Buffer.from(signature.replace('sha256=', ''));
+    
+    return expectedBuffer.length === receivedBuffer.length && 
+           timingSafeEqual(expectedBuffer, receivedBuffer);
+  } catch {
+    return false;
+  }
+};
+
 export async function POST(request: Request) {
   const signature = getHeaderSafe(request.headers.get('x-flouci-signature'));
   const webhookSecret = process.env.FLOUCI_WEBHOOK_SECRET || '';
+  const idempotencyKey = getHeaderSafe(request.headers.get('x-idempotency-key'));
 
+  // Validate HMAC signature
   if (webhookSecret) {
-    const expected = Buffer.from(webhookSecret);
-    const received = Buffer.from(signature);
-    if (
-      expected.length !== received.length ||
-      !timingSafeEqual(expected, received)
-    ) {
+    const payloadText = await request.text();
+    const isValid = await verifyHMACSignature(payloadText, signature, webhookSecret);
+    
+    if (!isValid) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
+    
+    // Re-parse the body for further processing
+    request = new Request(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: payloadText,
+    });
   }
 
   let payload: WebhookPayload | null = null;
@@ -45,6 +70,23 @@ export async function POST(request: Request) {
 
   if (!payload) {
     return NextResponse.json({ error: 'Empty payload' }, { status: 400 });
+  }
+
+  // Check idempotency key
+  if (idempotencyKey && supabaseUrl && serviceRoleKey) {
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+
+    const { data: existingEvent } = await supabase
+      .from('webhook_events')
+      .select('id')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle();
+
+    if (existingEvent) {
+      return NextResponse.json({ received: true, message: 'Event already processed' });
+    }
   }
 
   const statusRaw =
@@ -91,6 +133,10 @@ export async function POST(request: Request) {
   let amountTnd = currency === 'TND' ? amountValue / 1000 : amountValue;
   let developerTrackingId = orderId;
 
+  // Get Supabase configuration early for idempotency check
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
   if (paymentId) {
     const appId = process.env.FLOUCI_PUBLIC_KEY;
     const appSecret = process.env.FLOUCI_SECRET_KEY;
@@ -134,70 +180,118 @@ export async function POST(request: Request) {
     }
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  // Validate Supabase configuration
+  if (!supabaseUrl || !serviceRoleKey) {
+    return NextResponse.json(
+      { error: 'Missing Supabase configuration' },
+      { status: 500 }
+    );
+  }
 
-  if (supabaseUrl && serviceRoleKey) {
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
 
-    const description = developerTrackingId
-      ? `Flouci order ${developerTrackingId}`
-      : 'Flouci payment';
-    const { data: existingTransaction } = await supabase
-      .from('transactions')
-      .select('id')
-      .eq('description', description)
-      .maybeSingle();
+  // Record webhook event for idempotency
+  if (idempotencyKey) {
+    const { error: eventError } = await supabase.from('webhook_events').insert([
+      {
+        idempotency_key: idempotencyKey,
+        event_type: 'payment_webhook',
+        payload: payload,
+      },
+    ]);
 
-    if (!existingTransaction) {
-      const { error } = await supabase.from('transactions').insert([
-        {
-          type: 'sale',
-          amount: amountTnd,
-          status,
-          description,
+    if (eventError) {
+      console.error('Failed to record webhook event:', eventError);
+    }
+  }
+
+  // Validate required fields
+  if (!developerTrackingId) {
+    return NextResponse.json(
+      { error: 'Missing order ID' },
+      { status: 400 }
+    );
+  }
+
+  const description = `Flouci order ${developerTrackingId}`;
+  
+  // Check for existing transaction with better validation
+  const { data: existingTransaction } = await supabase
+    .from('transactions')
+    .select('id, status')
+    .eq('description', description)
+    .maybeSingle();
+
+  // Only create new transaction if it doesn't exist or status changed
+  if (!existingTransaction) {
+    const { error } = await supabase.from('transactions').insert([
+      {
+        type: 'sale',
+        amount: amountTnd,
+        status,
+        description,
+        metadata: {
+          payment_id: paymentId,
+          order_id: developerTrackingId,
+          original_payload: payload,
         },
-      ]);
+      },
+    ]);
 
-      if (error) {
+    if (error) {
+      console.error('Failed to record transaction:', error);
+      return NextResponse.json(
+        { error: 'Failed to record transaction' },
+        { status: 500 }
+      );
+    }
+  } else if (existingTransaction.status !== status) {
+    // Update status if changed
+    const { error: updateError } = await supabase
+      .from('transactions')
+      .update({ 
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existingTransaction.id);
+
+    if (updateError) {
+      console.error('Failed to update transaction status:', updateError);
+    }
+  }
+
+  // Create tickets only for completed payments
+  if (status === 'completed') {
+    const eventId = metadata.event_id as string | undefined;
+    const userId = metadata.user_id as string | undefined;
+    const quantityValue = Number(metadata.quantity) || 0;
+    const ticketTypeId =
+      (metadata.ticket_type_id as string | undefined) || null;
+
+    if (eventId && userId && quantityValue > 0) {
+      const unitPrice = quantityValue ? amountTnd / quantityValue : amountTnd;
+      const ticketsToInsert = Array.from({ length: quantityValue }).map(
+        () => ({
+          event_id: eventId,
+          user_id: userId,
+          price_paid: unitPrice,
+          status: 'valid',
+          ticket_type_id: ticketTypeId,
+        })
+      );
+
+      const { error: ticketsError } = await supabase
+        .from('tickets')
+        .insert(ticketsToInsert);
+
+      if (ticketsError) {
+        console.error('Failed to create tickets:', ticketsError);
         return NextResponse.json(
-          { error: 'Failed to record transaction' },
+          { error: 'Failed to create tickets' },
           { status: 500 }
         );
-      }
-    }
-
-    if (status === 'completed') {
-      const eventId = metadata.event_id as string | undefined;
-      const userId = metadata.user_id as string | undefined;
-      const quantityValue = Number(metadata.quantity) || 0;
-      const ticketTypeId =
-        (metadata.ticket_type_id as string | undefined) || null;
-
-      if (eventId && userId && quantityValue > 0) {
-        const unitPrice = quantityValue ? amountTnd / quantityValue : amountTnd;
-        const ticketsToInsert = Array.from({ length: quantityValue }).map(
-          () => ({
-            event_id: eventId,
-            user_id: userId,
-            price_paid: unitPrice,
-            status: 'valid',
-            ticket_type_id: ticketTypeId,
-          })
-        );
-
-        const { error: ticketsError } = await supabase
-          .from('tickets')
-          .insert(ticketsToInsert);
-
-        if (ticketsError) {
-          return NextResponse.json(
-            { error: 'Failed to create tickets' },
-            { status: 500 }
-          );
-        }
       }
     }
   }
